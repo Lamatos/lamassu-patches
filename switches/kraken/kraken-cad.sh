@@ -3,7 +3,7 @@ set -e
 
 echo
 echo "Updating Kraken plugin to use CAD..."
-curl -#o $(npm root -g)/lamassu-server/lib/plugins/common/ccxt.js https://raw.githubusercontent.com/lamassu/lamassu-patches/master/switches/kraken/ccxt-cad.js &>/dev/null
+curl -#o $(npm root -g)/lamassu-server/lib/plugins/common/ccxt.js https://raw.githubusercontent.com/Lamatos/lamassu-patches/master/switches/kraken/ccxt-cad.js &>/dev/null
 
 echo
 echo "Restarting lamassu-server..."

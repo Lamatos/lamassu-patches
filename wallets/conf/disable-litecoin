@@ -1,0 +1,23 @@
+#!/bin/bash
+
+echo
+echo "Disabling Litecoin. This can take a minute..."
+echo
+
+curl -sS https://raw.githubusercontent.com/lamassu/lamassu-patches/master/logs/add-support-scripts | bash &>/dev/null
+
+cd /etc/supervisor/conf.d &>/dev/null
+mkdir disabled &>/dev/null
+
+mv litecoin.conf disabled/
+
+cd ~
+
+supervisorctl reread &>/dev/null
+supervisorctl update all &>/dev/null
+
+send-server-log ltc-disable-post &>/dev/null
+
+echo
+echo "Done. Please inform support that this script has been run."
+echo

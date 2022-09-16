@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-export LOG_FILE=/tmp/install.log
+export LOG_FILE=/tmp/cert-regen.log
 
 CERT_DIR=/etc/ssl/certs
 KEY_DIR=/etc/ssl/private
@@ -12,14 +12,15 @@ CA_PATH=$CERT_DIR/Lamassu_OP_Root_CA.pem
 SERVER_KEY_PATH=$KEY_DIR/Lamassu_OP.key
 SERVER_CERT_PATH=$CERT_DIR/Lamassu_OP.pem
 
+echo
 echo "Backing up SSL certificates..."
 
 mkdir -p /root/backups/cert_backup
 cd /root/backups/cert_backup
 
-tar -czvf etc_ssl_certs.tar.gz $CERT_DIR
-tar -czvf etc_ssl_private.tar.gz $KEY_DIR
-tar -czvf etc_lamassu.tar.gz $CONFIG_DIR
+tar -czvf etc_ssl_certs.tar.gz $CERT_DIR  >> $LOG_FILE 2>&1
+tar -czvf etc_ssl_private.tar.gz $KEY_DIR >> $LOG_FILE 2>&1
+tar -czvf etc_lamassu.tar.gz $CONFIG_DIR >> $LOG_FILE 2>&1
 
 cd
 
@@ -49,7 +50,7 @@ openssl genrsa \
   -out $SERVER_KEY_PATH \
   4096 >> $LOG_FILE 2>&1
 
-IP=$(ifconfig eth0 | grep "inet" | grep -v "inet6" | awk -F: '{print $2}' | awk '{print $1}')
+IP=$(ifconfig eth0 | grep "inet" | grep -v "inet6" | awk '{print $2}')
 
 openssl req -new \
   -key $SERVER_KEY_PATH \
@@ -72,8 +73,11 @@ openssl x509 \
   -extensions SAN \
   -days 3650 >> $LOG_FILE 2>&1
 
+sed -i "s/\"hostname\": \"[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\",/\"hostname\": \""$IP"\",/g" /etc/lamassu/lamassu.json
+
 supervisorctl restart lamassu-server lamassu-admin-server >> $LOG_FILE 2>&1
 
 rm /tmp/Lamassu_OP.csr.pem
 
-echo "Finished and restarted"
+echo
+echo "Finished."

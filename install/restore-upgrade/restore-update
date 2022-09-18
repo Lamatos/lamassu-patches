@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+echo
+echo "Restoring lamassu-server..."
+
+curl -sS https://ssubucket.ams3.digitaloceanspaces.com/server-rescue/lamassuserver.tar.xz | tar -xJ -C /usr/lib/node_modules/
+
+echo
+echo "Removing update lock..."
+
+rmdir /var/lock/lamassu-update &>/dev/null
+
+echo "Upgrading. Please wait up to 20 minutes..."
+
+curl -sS https://raw.githubusercontent.com/lamassu/lamassu-install/forsaken-fiat/upgrade-ls | bash

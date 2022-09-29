@@ -1,0 +1,21 @@
+#!/bin/bash
+
+echo
+echo "Disabling Geth and sending log files. This will take a minute..."
+echo
+
+cd /etc/supervisor/conf.d &>/dev/null
+mkdir disabled &>/dev/null
+
+mv ethereum.conf disabled/
+
+cd ~
+
+supervisorctl reread &>/dev/null
+supervisorctl update all &>/dev/null
+
+send-server-log node-disable-post &>/dev/null
+
+echo
+echo "Done. Please inform support that this script has been run."
+echo

@@ -4,5 +4,5 @@ cd /var/lock/
 rm -rf lamassu-update
 
 echo
-echo "Done. Please inform support that this script has been run."
+echo "Done."
 echo

@@ -1,0 +1,11 @@
+echo
+echo "Repairing BTC Wallet. This will only take a second..."
+echo
+ 
+rm -rf /mnt/blockchains/bitcoin/peers.dat
+
+supervisorctl start bitcoin
+
+echo
+echo "All done! Please inform support that this script has been run."
+echo

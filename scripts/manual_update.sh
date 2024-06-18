@@ -3,8 +3,8 @@
 # Set the URL for the update.tar file
 UPDATE_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?SIGNED-QUERY-REMOVED"
 
-# Download the update.tar file and save it as update.tar using wget
-wget -O update.tar "$UPDATE_URL"
+# Download the update.tar file using curl with -J -L -O options
+curl -J -L -O "$UPDATE_URL"
 
 # Check if the download was successful
 if [ ! -f update.tar ]; then

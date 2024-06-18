@@ -3,24 +3,29 @@
 # Define the URL for the update.tar file (URL with query parameters)
 UPDATE_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20240618%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20240618T164243Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=7eb5f21ccb3e244426c902b058350a6e9159e68cbf566beadf7c9375b23a8d67"
 
-# Function to display a progress bar
-# Usage: progress_bar <current_progress> <total_progress>
+# Function to display a progress bar during download
 progress_bar() {
-    local current_progress=$1
-    local total_progress=$2
-    local percentage=$((current_progress * 100 / total_progress))
-    local completed=$((percentage / 2))
-    local remaining=$((50 - completed))
-    printf "\r[%-${completed}s%-${remaining}s] %d%%" "==" " " "$percentage"
+    local downloaded_size=$1
+    local total_size=$2
+    local percentage=$((downloaded_size * 100 / total_size))
+    local progress=$((percentage / 2))
+    local dots=$((50 - progress))
+    printf "\r[%-${progress}s%-${dots}s] %d%%" "==" " " "$percentage"
 }
 
-# Download update.tar file
+# Download update.tar file and show progress
 echo "Downloading update.tar..."
-wget --progress=bar:force:noscroll -qO update.tar "$UPDATE_URL"
+wget --progress=bar:force:noscroll --show-progress -O update.tar "$UPDATE_URL" 2>&1 | {
+    while IFS= read -r line; do
+        if [[ $line =~ ([0-9.]+)%\s+in\s+([0-9.]+[KM]?)s ]]; then
+            progress_bar "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+        fi
+    done
+}
 
 # Check if download was successful
 if [ $? -ne 0 ]; then
-    echo "Failed to download update.tar"
+    echo -e "\nFailed to download update.tar"
     exit 1
 fi
 

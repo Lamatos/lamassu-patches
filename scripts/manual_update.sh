@@ -3,8 +3,8 @@
 # Set the URL for the update.tar file
 UPDATE_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20240618%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20240618T164243Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=7eb5f21ccb3e244426c902b058350a6e9159e68cbf566beadf7c9375b23a8d67"
 
-# Download the update.tar file and save it as update.tar using wget
-wget -O update.tar "$UPDATE_URL"
+# Download the update.tar file using curl with -J -L -O options
+curl -J -L -O "$UPDATE_URL"
 
 # Check if the download was successful
 if [ ! -f update.tar ]; then

@@ -21,8 +21,14 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Navigate into the extracted directory
-cd update || { echo "Failed to change directory to update"; exit 1; }
+# List contents of current directory for debugging
+ls -la
+
+# Navigate into the extracted update directory
+cd update || { echo "Failed to change directory to update"; ls -la; exit 1; }
+
+# List contents of update directory for debugging
+ls -la
 
 # Extract subpackage.tgz file
 tar -xf subpackage.tgz
@@ -33,8 +39,14 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# List contents of current directory for debugging
+ls -la
+
 # Navigate into the subpackage directory
-cd subpackage || { echo "Failed to change directory to subpackage"; exit 1; }
+cd subpackage || { echo "Failed to change directory to subpackage"; ls -la; exit 1; }
+
+# List contents of subpackage directory for debugging
+ls -la
 
 # Copy lamassu-machine directory to /opt
 cp -r lamassu-machine /opt

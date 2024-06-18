@@ -7,7 +7,10 @@ UPDATE_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packag
 progress_bar() {
     local downloaded_size=$1
     local total_size=$2
-    local percentage=$((downloaded_size * 100 / total_size))
+    local percentage=0
+    if [ $total_size -gt 0 ]; then
+        percentage=$((downloaded_size * 100 / total_size))
+    fi
     local progress=$((percentage / 2))
     local dots=$((50 - progress))
     printf "\r[%-${progress}s%-${dots}s] %d%%" "==" " " "$percentage"
@@ -40,7 +43,7 @@ tar -xf update.tar -C /tmp || {
 
 echo "Extraction complete."
 
-# Navigate into the extracted package directory
+# Navigate into the extracted package directory (assuming it extracts to 'package')
 cd /tmp/package || {
     echo "Failed to change directory to /tmp/package"
     ls -la /tmp
@@ -50,7 +53,7 @@ cd /tmp/package || {
 # List contents of package directory for debugging
 ls -la
 
-# Extract subpackage.tgz file
+# Extract subpackage.tgz file (assuming it extracts to 'subpackage')
 echo "Extracting subpackage.tgz..."
 tar -xf subpackage.tgz || {
     echo "Failed to extract subpackage.tgz"

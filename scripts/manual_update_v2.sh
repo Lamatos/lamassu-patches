@@ -46,12 +46,12 @@ echo "Extraction complete."
 # Navigate into the extracted package directory (assuming it extracts to 'package')
 cd /tmp/package || {
     echo "Failed to change directory to /tmp/package"
-    ls -la /tmp
+    ls -la /tmp > /dev/null
     exit 1
 }
 
-# List contents of package directory for debugging
-ls -la
+# List contents of package directory for debugging (redirect output to /dev/null)
+ls -la /tmp/package > /dev/null
 
 # Extract subpackage.tgz file (assuming it extracts to 'subpackage')
 echo "Extracting subpackage.tgz..."
@@ -65,12 +65,12 @@ echo "Extraction complete."
 # Navigate into the subpackage directory
 cd subpackage || {
     echo "Failed to change directory to subpackage"
-    ls -la /tmp/package
+    ls -la /tmp/package > /dev/null
     exit 1
 }
 
-# List contents of subpackage directory for debugging
-ls -la
+# List contents of subpackage directory for debugging (redirect output to /dev/null)
+ls -la /tmp/package/subpackage > /dev/null
 
 # Copy lamassu-machine directory to /opt
 echo "Copying lamassu-machine to /opt..."

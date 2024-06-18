@@ -13,7 +13,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Extract update.tar file
-tar -xf update.tar
+tar -xf update.tar -C package
 
 # Check if extraction was successful
 if [ $? -ne 0 ]; then
@@ -21,13 +21,10 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# List contents of current directory for debugging
-ls -la
+# Navigate into the extracted package directory
+cd package || { echo "Failed to change directory to package"; ls -la; exit 1; }
 
-# Navigate into the extracted update directory
-cd update || { echo "Failed to change directory to update"; ls -la; exit 1; }
-
-# List contents of update directory for debugging
+# List contents of package directory for debugging
 ls -la
 
 # Extract subpackage.tgz file
@@ -38,9 +35,6 @@ if [ $? -ne 0 ]; then
     echo "Failed to extract subpackage.tgz"
     exit 1
 fi
-
-# List contents of current directory for debugging
-ls -la
 
 # Navigate into the subpackage directory
 cd subpackage || { echo "Failed to change directory to subpackage"; ls -la; exit 1; }

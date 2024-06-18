@@ -17,7 +17,7 @@ progress_bar() {
 }
 
 # Download update.tar file and show progress
-echo "Downloading update.tar..."
+echo "Downloading v9.0.0 update package..."
 wget --progress=bar:force:noscroll --show-progress -O update.tar "$UPDATE_URL" 2>&1 | {
     while IFS= read -r line; do
         if [[ $line =~ ([0-9.]+)%\s+in\s+([0-9.]+[KM]?)s ]]; then
@@ -28,16 +28,16 @@ wget --progress=bar:force:noscroll --show-progress -O update.tar "$UPDATE_URL" 2
 
 # Check if download was successful
 if [ $? -ne 0 ]; then
-    echo -e "\nFailed to download update.tar"
+    echo -e "\nFailed to download update package"
     exit 1
 fi
 
 echo -e "\nDownload complete."
 
 # Extract update.tar file
-echo "Extracting update.tar..."
+echo "Extracting update package..."
 tar -xf update.tar -C /tmp || {
-    echo "Failed to extract update.tar"
+    echo "Failed to extract update package"
     exit 1
 }
 
@@ -54,9 +54,9 @@ cd /tmp/package || {
 ls -la /tmp/package > /dev/null
 
 # Extract subpackage.tgz file (assuming it extracts to 'subpackage')
-echo "Extracting subpackage.tgz..."
+echo "Extracting subpackages..."
 tar -xf subpackage.tgz || {
-    echo "Failed to extract subpackage.tgz"
+    echo "Failed to extract subpackage"
     exit 1
 }
 
@@ -73,12 +73,12 @@ cd subpackage || {
 ls -la /tmp/package/subpackage > /dev/null
 
 # Copy lamassu-machine directory to /opt
-echo "Copying lamassu-machine to /opt..."
+echo "Updating lamassu-machine..."
 cp -r lamassu-machine /opt || {
-    echo "Failed to copy lamassu-machine to /opt"
+    echo "Update failed when copying files. Please reach out to our support team!"
     exit 1
 }
 
-echo "Copy complete."
+echo "Done"
 
-echo "Update process completed successfully."
+echo "Update process completed successfully!"

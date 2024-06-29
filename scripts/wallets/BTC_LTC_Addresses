@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Ensure the /tmp/exports directory exists
+mkdir -p /tmp/exports
+
+# Function to export addresses to a CSV file for a given cryptocurrency
+export_addresses_to_csv() {
+    local cli=$1
+    local conf=$2
+    local csv_file="/tmp/exports/${cli}_addresses.csv"
+    echo "Exporting addresses to $csv_file..."
+
+    # Create CSV file and add header
+    echo "address,label" > $csv_file
+
+    # Get address groupings
+    local address_groupings=$($cli -conf=$conf listaddressgroupings)
+    if [ -n "$address_groupings" ]; then
+        local addresses=$(echo $address_groupings | jq -r '.[][][0]')
+        for address in $addresses; do
+            echo "$address,grouping" >> $csv_file
+        done
+    fi
+
+    # Get addresses from transactions
+    local received_addresses=$($cli -conf=$conf listreceivedbyaddress 0 true)
+    if [ -n "$received_addresses" ]; then
+        local tx_addresses=$(echo $received_addresses | jq -r '.[] | .address')
+        for address in $tx_addresses; do
+            echo "$address,transaction" >> $csv_file
+        done
+    fi
+
+    echo "Export for $cli completed."
+}
+
+# Export Bitcoin addresses to CSV
+echo "Exporting Bitcoin Addresses..."
+export_addresses_to_csv "bitcoin-cli" "/mnt/blockchains/bitcoin/bitcoin.conf"
+
+# Export Litecoin addresses to CSV
+echo "Exporting Litecoin Addresses..."
+export_addresses_to_csv "litecoin-cli" "/mnt/blockchains/litecoin/litecoin.conf"
+
+echo "All addresses have been exported to /tmp/exports."

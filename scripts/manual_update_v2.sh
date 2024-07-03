@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the URL for the update.tar file (URL with query parameters)
-UPDATE_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20240618%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20240618T164243Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=7eb5f21ccb3e244426c902b058350a6e9159e68cbf566beadf7c9375b23a8d67"
+UPDATE_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20240703%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20240703T020908Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=8ca8a251eddc034e25bcd259bfe45606e4eee7950a6ff472f92826ccf149ab8e"
 
 # Function to display a progress bar during download
 progress_bar() {

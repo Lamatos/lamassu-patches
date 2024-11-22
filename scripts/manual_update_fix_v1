@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Define the URLs for the files
+UPDATE_TAR_URL="~https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20241122%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20241122T165614Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=16e93265d3ac2852d661c5abb8ed658d69ab77750c52165780126df554aad67b"
+MANUAL_UPDATE_JS_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/manual_update.js?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20241122%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20241122T165703Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=a5fa4c4f91b81adfe68015d49826304e8572c8b4b0055b657eee469bb4ee172b"
+
+# Target directories
+UPDATE_DIR="/opt/lamassu-updates/download"
+LAMASSU_MACHINE_DIR="/opt/lamassu-machine"
+
+# Download the update.tar to /tmp
+echo "Downloading 'update.tar' from ${UPDATE_TAR_URL} to /tmp"
+curl -o /tmp/update.tar "$UPDATE_TAR_URL"
+if [[ $? -ne 0 ]]; then
+  echo "Error: Failed to download 'update.tar'"
+  exit 1
+fi
+
+# Download the manual_update.js to /tmp
+echo "Downloading 'manual_update.js' from ${MANUAL_UPDATE_JS_URL} to /tmp"
+curl -o /tmp/manual_update.js "$MANUAL_UPDATE_JS_URL"
+if [[ $? -ne 0 ]]; then
+  echo "Error: Failed to download 'manual_update.js'"
+  exit 1
+fi
+
+# Create the target directory for updates
+echo "Creating directory: ${UPDATE_DIR}"
+mkdir -p "$UPDATE_DIR"
+
+# Copy update.tar to the target directory
+echo "Copying '/tmp/update.tar' to '${UPDATE_DIR}'"
+cp /tmp/update.tar "$UPDATE_DIR"
+
+# Copy manual_update.js to /opt/lamassu-machine
+echo "Copying '/tmp/manual_update.js' to '${LAMASSU_MACHINE_DIR}'"
+mkdir -p "$LAMASSU_MACHINE_DIR"
+cp /tmp/manual_update.js "$LAMASSU_MACHINE_DIR"
+
+# Change directory to /opt/lamassu-machine
+echo "Changing directory to '${LAMASSU_MACHINE_DIR}'"
+cd "$LAMASSU_MACHINE_DIR" || { echo "Failed to change directory to '${LAMASSU_MACHINE_DIR}'"; exit 1; }
+
+# Script completed
+echo "Script executed successfully. You are now in '${LAMASSU_MACHINE_DIR}'."

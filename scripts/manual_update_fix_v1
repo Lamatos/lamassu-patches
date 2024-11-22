@@ -42,4 +42,4 @@ echo "Changing directory to '${LAMASSU_MACHINE_DIR}'"
 cd "$LAMASSU_MACHINE_DIR" || { echo "Failed to change directory to '${LAMASSU_MACHINE_DIR}'"; exit 1; }
 
 # Script completed
-echo "Script executed successfully. You are now in '${LAMASSU_MACHINE_DIR}'."
+echo "Script executed successfully. You can now run: node /opt/lamassu-machine/manual_update.js"

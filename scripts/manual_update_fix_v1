@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the URLs for the files
-UPDATE_TAR_URL="~https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?SIGNED-QUERY-REMOVED"
+UPDATE_TAR_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?SIGNED-QUERY-REMOVED"
 MANUAL_UPDATE_JS_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/manual_update.js?SIGNED-QUERY-REMOVED"
 
 # Target directories

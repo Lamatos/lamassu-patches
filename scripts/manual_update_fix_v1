@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Define the URLs for the files
-UPDATE_TAR_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20241202%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20241202T144802Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=13d94bff4cb9a78a35b6aedb0dd2875b2d4b6462836743b7d01407f42f95ce86"
-MANUAL_UPDATE_JS_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/manual_update.js?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20241202%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20241202T144724Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=a4c603f6add4d889e3cb1faeaf4e9721c8040fa22eccf9bc0476f851b5f10eee"
+UPDATE_TAR_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20250219%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20250219T133830Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=b8d60341cfa694696fa5c9bdcc4d5106bd079c7a137473e1a4aa6b77bed98b9d"
+MANUAL_UPDATE_JS_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/manual_update.js?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EDYKHSFKASPKKZH6WKGM%2F20250219%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20250219T133122Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=959a8463e63ddfd2bdf87a6c7885d6ee31ca60d5c1c4728b1417d17c49f30abc"
 
 # Target directories
 UPDATE_DIR="/opt/lamassu-updates/download"

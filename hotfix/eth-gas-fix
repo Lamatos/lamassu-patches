@@ -1,0 +1,14 @@
+#!/bin/bash
+
+FILE_PATH="/usr/lib/node_modules/lamassu-server/lib/plugins/wallet/geth/base.js"
+
+# Ensure the file exists before attempting to modify it
+if [ ! -f "$FILE_PATH" ]; then
+  echo "Error: File not found: $FILE_PATH"
+  exit 1
+fi
+
+# Use sed to replace the line in place
+sed -i 's/const maxFeePerGas = baseFeePerGas.plus(neededPriority)/const maxFeePerGas = BN.maximum(baseFeePerGas.plus(neededPriority), maxPriorityFeePerGas)/' "$FILE_PATH"
+
+echo "Modification complete."

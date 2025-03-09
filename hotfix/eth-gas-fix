@@ -8,7 +8,13 @@ if [ ! -f "$FILE_PATH" ]; then
   exit 1
 fi
 
-# Use sed to replace the line in place
-sed -i 's/const maxFeePerGas = baseFeePerGas.plus(neededPriority)/const maxFeePerGas = BN.maximum(baseFeePerGas.plus(neededPriority), maxPriorityFeePerGas)/' "$FILE_PATH"
+# Use sed to replace the maxPriorityFeePerGas line
+sed -i "s/const maxPriorityFeePerGas = new BN(web3.utils.toWei('2.5', 'gwei')) \/\/ web3 default value/const maxPriorityFeePerGas = new BN(web3.utils.toWei('1.0', 'gwei')) \/\/ web3 default value/" "$FILE_PATH"
 
-echo "Modification complete."
+# Use sed to replace the maxFeePerGas calculation
+sed -i "s/const maxFeePerGas = baseFeePerGas.plus(neededPriority)/const maxFeePerGas = baseFeePerGas.times(2).plus(maxPriorityFeePerGas)/" "$FILE_PATH"
+
+# Restart services
+supervisorctl restart lamassu-server lamassu-admin-server
+
+echo "All done!"

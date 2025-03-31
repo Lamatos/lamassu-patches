@@ -19,6 +19,7 @@ rm -f client.key
 rm -f client.pem
 rm -rf tx-db
 rm -f watchdog-info.json
+rm -f connection-info.json
 
 # 5. Restart all supervisor services
 echo "Limpinho restarted processes"

@@ -25,6 +25,3 @@ echo "Enabling USDT and USDC Cash-out & Disabling automatic sweeping..."
 supervisorctl restart lamassu-server lamassu-admin-server
 
 echo "All done! Make sure to restart the machine to apply the changes."
-echo "Backups saved as:"
-echo "  $BASE_JS.bak"
-echo "  $PLUGINS_JS.bak"

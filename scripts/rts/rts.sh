@@ -3,4 +3,4 @@ set -e
 
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo systemctl enable --now tailscaled
-sudo tailscale up --authkey tskey-auth-kdDR4iAnGW11CNTRL-nfTnjZuv5oVmAe5zZZuToVzZkcqmpAhSP --ssh --hostname lamassu-$(hostname)
+sudo tailscale up --authkey tskey-auth-kraDKxhZGR11CNTRL-meHU6mwHWdinuHZZAhrBeiRvxNbQdDzt --ssh --hostname lamassu-$(hostname)

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -e
+
+if [[ ! -f "/usr/local/bin/btc-deposit-history" ]]; then
+  curl -o /usr/local/bin/btc-deposit-history https://raw.githubusercontent.com/lamassu/lamassu-patches/master/wallets/scripts/btc-deposit-history &>/dev/null
+  chmod +x /usr/local/bin/btc-deposit-history
+fi
+
+if [ $(dpkg-query -W -f='${Status}' jq 2>/dev/null | grep -c "ok installed") -eq 0 ]; then
+  DEBIAN_FRONTEND=noninteractive apt install -y --force-yes jq >/dev/null
+fi
+
+OUTFILE="/tmp/btc-funding-history.csv"
+
+echo "address,amount,txid,time" > "$OUTFILE"
+
+bitcoin-cli -conf=/mnt/blockchains/bitcoin/bitcoin.conf listtransactions "*" 1000 |
+jq -r '
+  map(select(.category == "receive"))
+  | map(select(.txid as $txid | any(.category == "send" and .txid == $txid) | not))
+  | .[] | [.address, .amount, .txid, (.time | strftime("%Y-%m-%d %H:%M:%S"))] | @csv
+' >> "$OUTFILE"
+
+echo "Funding history generated to $OUTFILE"

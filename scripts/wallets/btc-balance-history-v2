@@ -1,24 +1,42 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-# Ensure jq is installed
+CONF="/mnt/blockchains/bitcoin/bitcoin.conf"
+OUT="/tmp/btc-funding-history.csv"
+
+# Ensure jq exists
 if ! command -v jq >/dev/null 2>&1; then
   echo "jq not found, installing..."
+  DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null
   DEBIAN_FRONTEND=noninteractive apt-get install -y jq >/dev/null
 fi
 
-# Output file
-OUTFILE="/tmp/btc-funding-history.csv"
+echo "address,amount,txid,time" > "$OUT"
 
-# Write CSV header
-echo "address,amount,txid,time" > "$OUTFILE"
+COUNT=1000
+SKIP=0
 
-# Query transactions and filter to only external deposits
-bitcoin-cli -conf=/mnt/blockchains/bitcoin/bitcoin.conf listtransactions "*" 1000 |
-jq -r '
-  map(select(.category == "receive"))
-  | map(select(.txid as $txid | any(.category == "send" and .txid == $txid) | not))
-  | .[] | [.address, .amount, .txid, (.time | strftime("%Y-%m-%d %H:%M:%S"))] | @csv
-' >> "$OUTFILE"
+while :; do
+  JSON="$(bitcoin-cli -conf="$CONF" listtransactions "*" $COUNT $SKIP true)"
+  # stop if no more results
+  [[ "$JSON" == "[]" || -z "$JSON" ]] && break
 
-echo "Funding history exported to $OUTFILE"
+  echo "$JSON" | jq -r '
+    . as $all
+    | [ .[] 
+        | select(.category == "receive")
+        | .txid as $tx
+        | select( any($all[]; .category == "send" and .txid == $tx) | not )
+      ]
+    | sort_by(.time)
+    | .[]
+    | [ .address, .amount, .txid, (.time | strftime("%Y-%m-%d %H:%M:%S")) ]
+    | @csv
+  ' >> "$OUT"
+
+  # if fewer than COUNT returned, we're done
+  [[ $(echo "$JSON" | jq 'length') -lt $COUNT ]] && break
+  SKIP=$((SKIP + COUNT))
+done
+
+echo "Funding history exported to $OUT"

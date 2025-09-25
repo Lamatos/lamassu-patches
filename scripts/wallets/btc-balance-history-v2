@@ -4,9 +4,7 @@ set -euo pipefail
 CONF="/mnt/blockchains/bitcoin/bitcoin.conf"
 OUT="/tmp/btc-funding-history.csv"
 
-# Ensure jq exists
 if ! command -v jq >/dev/null 2>&1; then
-  echo "jq not found, installing..."
   DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null
   DEBIAN_FRONTEND=noninteractive apt-get install -y jq >/dev/null
 fi
@@ -18,7 +16,6 @@ SKIP=0
 
 while :; do
   JSON="$(bitcoin-cli -conf="$CONF" listtransactions "*" $COUNT $SKIP true)"
-  # stop if no more results
   [[ "$JSON" == "[]" || -z "$JSON" ]] && break
 
   echo "$JSON" | jq -r '
@@ -34,7 +31,6 @@ while :; do
     | @csv
   ' >> "$OUT"
 
-  # if fewer than COUNT returned, we're done
   [[ $(echo "$JSON" | jq 'length') -lt $COUNT ]] && break
   SKIP=$((SKIP + COUNT))
 done

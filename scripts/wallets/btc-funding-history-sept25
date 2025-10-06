@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONF="/mnt/blockchains/bitcoin/bitcoin.conf"
+OUT="/tmp/btc-funding-history-sep2025.csv"
+
+# Check jq
+if ! command -v jq &>/dev/null; then
+  echo "Installing jq..."
+  DEBIAN_FRONTEND=noninteractive apt install -y jq >/dev/null
+fi
+
+# Convert date range to epoch timestamps
+START=$(date -d "2025-09-01 00:00:00" +%s)
+END=$(date -d "2025-09-30 23:59:59" +%s)
+
+# Write CSV header
+echo "address,amount,txid,time" > "$OUT"
+
+COUNT=1000
+SKIP=0
+
+echo "Exporting BTC funding history for September 2025..."
+while true; do
+  JSON=$(bitcoin-cli -conf="$CONF" listtransactions "*" $COUNT $SKIP true)
+  if [[ "$JSON" == "[]" ]]; then
+    break
+  fi
+
+  # Filter and format
+  echo "$JSON" | jq -r --argjson START "$START" --argjson END "$END" '
+    [
+      .[] | select(.category == "receive")
+      | select(.time >= $START and .time <= $END)
+    ] as $receives |
+    [
+      .[] | select(.category == "send")
+    ] as $sends |
+    $receives
+    | map(select([.txid] | inside([$sends[].txid]) | not))
+    | sort_by(.time)
+    | .[]
+    | "\(.address),\(.amount),\(.txid),\(strftime("%Y-%m-%d %H:%M:%S"; .time))"
+  ' >> "$OUT"
+
+  # Pagination
+  SKIP=$((SKIP + COUNT))
+done
+
+echo "✅ Funding history for September 2025 exported to: $OUT"

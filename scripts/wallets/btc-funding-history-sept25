@@ -4,60 +4,42 @@ set -euo pipefail
 CONF="/mnt/blockchains/bitcoin/bitcoin.conf"
 OUT="/tmp/btc-funding-history-sep2025.csv"
 
-# Ensure deps
-command -v bitcoin-cli >/dev/null || { echo "bitcoin-cli not found"; exit 1; }
-if ! command -v jq >/dev/null; then
+# Ensure jq is installed
+if ! command -v jq &>/dev/null; then
   echo "Installing jq..."
   DEBIAN_FRONTEND=noninteractive apt install -y jq >/dev/null
 fi
 
-# Date range (epoch)
-START=$(date -d "2025-09-01 00:00:00" +%s)
-END=$(date -d "2025-09-30 23:59:59" +%s)
+# Date range (UTC) for September 2025
+START=$(date -u -d "2025-09-01 00:00:00" +%s)
+END=$(date -u -d "2025-09-30 23:59:59" +%s)
 
 # CSV header
 echo "address,amount,txid,time" > "$OUT"
 
-COUNT=200    # smaller pages = faster + safer
+COUNT=1000
 SKIP=0
-PAGE=1
 
 echo "Exporting BTC funding history for September 2025..."
-
 while true; do
-  # Fetch a page
   JSON=$(bitcoin-cli -conf="$CONF" listtransactions "*" $COUNT $SKIP true)
-
-  # If no results, stop
-  BATCH_SIZE=$(echo "$JSON" | jq 'length')
-  if [[ "$BATCH_SIZE" -eq 0 ]]; then
-    echo "Done. (no more transactions)"
+  if [[ "$JSON" == "[]" ]]; then
     break
   fi
 
-  echo "Page $PAGE (skip=$SKIP, count=$COUNT) ... $BATCH_SIZE txs"
-
-  # Filter & append
+  # Keep only 'receive' entries within time range, excluding txids that also appear as 'send' (internal change)
   echo "$JSON" | jq -r --argjson START "$START" --argjson END "$END" '
     . as $all
-    | ($all | map(select(.category=="receive" and (.time >= $START and .time <= $END)))) as $receives
-    | ($all | map(select(.category=="send"))) as $sends
-    | $receives
-    | map(select( ($sends | any(.txid == .txid)) | not ))        # drop change: any send with same txid
+    | ($all | map(select(.category=="send")) | map(.txid) | unique) as $send_txids
+    | $all
+    | map(select(.category=="receive" and .time >= $START and .time <= $END))
+    | map(select( ($send_txids | index(.txid)) | not ))
     | sort_by(.time)
     | .[]
     | "\(.address),\(.amount),\(.txid),\(.time | strftime("%Y-%m-%d %H:%M:%S"))"
   ' >> "$OUT"
 
-  # Advance pagination
   SKIP=$((SKIP + COUNT))
-  PAGE=$((PAGE + 1))
-
-  # If this page returned fewer than COUNT, we’re at the end
-  if [[ "$BATCH_SIZE" -lt "$COUNT" ]]; then
-    echo "Reached last page."
-    break
-  fi
 done
 
-echo "✅ Export complete: $OUT"
+echo "✅ Funding history for September 2025 exported to: $OUT"

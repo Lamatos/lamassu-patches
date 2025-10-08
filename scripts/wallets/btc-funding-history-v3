@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+YEAR="${1:?Usage: $0 YEAR MONTH}"
+MONTH="${2:?Usage: $0 YEAR MONTH (e.g. 2025 09)}"
+
+CONF="/mnt/blockchains/bitcoin/bitcoin.conf"
+OUT="/tmp/btc-funding-history-${YEAR}-${MONTH}.csv"
+
+# jq
+command -v jq >/dev/null || { DEBIAN_FRONTEND=noninteractive apt install -y jq >/dev/null; }
+
+# Month range (UTC)
+START=$(date -u -d "${YEAR}-${MONTH}-01 00:00:00" +%s)
+END=$(date -u -d "${YEAR}-${MONTH}-01 00:00:00 +1 month -1 second" +%s)
+
+echo "address,amount,txid,time" > "$OUT"
+
+COUNT=200
+SKIP=0
+
+echo "Exporting BTC funding history for ${YEAR}-${MONTH}..."
+
+while true; do
+  JSON=$(bitcoin-cli -rpcwait -conf="$CONF" listtransactions "*" $COUNT $SKIP true)
+  [[ "$JSON" == "[]" ]] && break
+
+  NEWEST=$(printf '%s' "$JSON" | jq '.[0].time // 0')
+  # early stop if the newest item in this page is already older than our month
+  if (( NEWEST < START )); then break; fi
+
+  printf '%s' "$JSON" | jq -r --argjson START "$START" --argjson END "$END" '
+    . as $all
+    | ($all | map(select(.category=="send")) | map(.txid) | unique) as $send_txids
+    | $all
+    | map(select(.category=="receive" and .time >= $START and .time <= $END))
+    | map(select( ($send_txids | index(.txid)) | not ))
+    | sort_by(.time)
+    | .[]
+    | "\(.address),\(.amount),\(.txid),\(.time | strftime("%Y-%m-%d %H:%M:%S"))"
+  ' >> "$OUT"
+
+  SKIP=$((SKIP + COUNT))
+done
+
+echo "✅ Export written to: $OUT"

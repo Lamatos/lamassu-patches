@@ -4,43 +4,32 @@
 
 cat > /usr/lib/node_modules/lamassu-server/eth-cashout-sweep.js << 'EOF'
 #!/usr/bin/env node
-/**
- * eth-cashout-sweep.js
- *
- * Queries the DB for ETH cash-out payment addresses, checks on-chain
- * balances in concurrent groups, and sweeps non-dust balances to the hot wallet.
- *
- * Run with:
- *   node /usr/lib/node_modules/lamassu-server/eth-cashout-sweep.js
- */
-
 'use strict'
 
 require('./lib/environment-helper')
 
-const fs = require('fs')
+const fs       = require('fs')
 const readline = require('readline')
-const hdkey = require('ethereumjs-wallet/hdkey')
-const hkdf = require('futoin-hkdf')
+const hdkey    = require('ethereumjs-wallet/hdkey')
+const hkdf     = require('futoin-hkdf')
 const { FeeMarketEIP1559Transaction } = require('@ethereumjs/tx')
 const { default: Common, Chain, Hardfork } = require('@ethereumjs/common')
 const Web3 = require('web3')
-const _ = require('lodash/fp')
+const _    = require('lodash/fp')
 
-const db = require('./lib/db')
+const db            = require('./lib/db')
 const mnemonicHelpers = require('./lib/mnemonic-helpers')
-const settingsLoader = require('./lib/new-settings-loader')
-const configManager = require('./lib/new-config-manager')
+const settingsLoader  = require('./lib/new-settings-loader')
+const configManager   = require('./lib/new-config-manager')
 const BN = require('./lib/bn')
 
 const PAYMENT_PREFIX_PATH = "m/44'/60'/0'/0'"
-const DEFAULT_PREFIX_PATH  = "m/44'/60'/1'/0'"
-const ETH_TRANSFER_GAS     = 21000
-const CHAIN_ID             = 1
-const DUST_THRESHOLD_WEI   = BN('1000000000000000') // 0.001 ETH
+const DEFAULT_PREFIX_PATH = "m/44'/60'/1'/0'"
+const ETH_TRANSFER_GAS    = 21000
+const CHAIN_ID            = 1
+const DUST_THRESHOLD_WEI  = BN('1000000000000000')
 
-const CONCURRENT     = 10
-const CHECK_DELAY_MS = 2000
+const CHECK_DELAY_MS = 350
 const SWEEP_DELAY_MS = 2000
 
 const MNEMONIC_PATH = process.env.MNEMONIC_PATH
@@ -101,7 +90,7 @@ async function buildSweepTx(fromWallet, toAddress, balance, fees) {
   const fee    = fees.maxFeePerGas.times(gas)
   const toSend = balance.minus(fee)
 
-  if (toSend.lte(0)) throw new Error(`Balance cannot cover gas fee`)
+  if (toSend.lte(0)) throw new Error('Balance cannot cover gas fee')
 
   const rawTx = {
     chainId: CHAIN_ID,
@@ -143,12 +132,12 @@ async function main() {
     let ep = settings.accounts.infura.endpoint || ''
     if (!ep.startsWith('https://')) ep = 'https://' + ep
     web3.setProvider(new web3.providers.HttpProvider(ep))
-    console.log(`Connected via Infura`)
+    console.log('Connected via Infura')
   } else {
     const { utils: coinUtils } = require('@lamassu/coins')
     const port = coinUtils.getCryptoCurrency('ETH').defaultPort
     web3.setProvider(new web3.providers.HttpProvider(`http://localhost:${port}`))
-    console.log(`Connected via local geth`)
+    console.log('Connected via local geth')
   }
 
   const hotAddr = hotWallet(seed).getChecksumAddressString()
@@ -156,9 +145,9 @@ async function main() {
 
   const fees       = await getCurrentFees()
   const gasCostWei = fees.maxFeePerGas.times(ETH_TRANSFER_GAS)
-  console.log(`Estimated gas cost per sweep: ${gasCostWei.div(1e18).toFixed(8)} ETH`)
+  console.log(`Gas cost per sweep: ${gasCostWei.div(1e18).toFixed(8)} ETH`)
 
-  console.log('\nQuerying DB for ETH cash-out payment addresses...')
+  console.log('\nQuerying DB...')
   const rows = await db.manyOrNone(`
     SELECT DISTINCT ON (to_address) to_address, hd_index
     FROM cash_out_txs
@@ -177,70 +166,43 @@ async function main() {
     process.exit(0)
   }
 
-  const totalGroups = Math.ceil(rows.length / CONCURRENT)
-  console.log(`Found ${rows.length} candidate address(es) — checking in ${totalGroups} group(s) of ${CONCURRENT}...\n`)
+  console.log(`Found ${rows.length} addresses to scan.\n`)
 
-  const sweepable = []
-
-  for (let i = 0; i < rows.length; i += CONCURRENT) {
-    const group    = rows.slice(i, i + CONCURRENT)
-    const groupNum = Math.floor(i / CONCURRENT) + 1
-
-    process.stdout.write(`  Group ${groupNum}/${totalGroups} (${group.length} addresses) ... `)
-
-    const balances = await Promise.all(group.map(r => getBalance(r.to_address)))
-
-    let found = 0
-    balances.forEach((balance, j) => {
-      const afterGas = balance.minus(gasCostWei)
-      if (balance.gt(DUST_THRESHOLD_WEI) && afterGas.gt(0)) {
-        sweepable.push({
-          address: group[j].to_address,
-          hdIndex: group[j].hd_index,
-          balance,
-          afterGas,
-        })
-        found++
-      }
-    })
-
-    console.log(`done  (${found} sweepable, ${sweepable.length} total so far)`)
-
-    if (i + CONCURRENT < rows.length) await delay(CHECK_DELAY_MS)
-  }
-
-  if (sweepable.length === 0) {
-    console.log('\nNothing to sweep.')
-    process.exit(0)
-  }
-
-  const totalEth = sweepable.reduce((s, a) => s.plus(a.afterGas), BN(0)).div(1e18)
-  console.log(`\nFound ${sweepable.length} address(es) with ~${totalEth.toFixed(8)} ETH total -> ${hotAddr}`)
-
-  const answer = await prompt('\nSweep all to the hot wallet? [y/N] ')
+  const answer = await prompt(`Any ETH found will be swept immediately to ${hotAddr}. Continue? [y/N] `)
   if (answer !== 'y') {
     console.log('Aborted.')
     process.exit(0)
   }
 
-  const freshFees = await getCurrentFees()
+  console.log('')
   let ok = 0, fail = 0
 
-  for (const addr of sweepable) {
-    console.log(`\nSweeping ${addr.address} (HD index: ${addr.hdIndex})...`)
-    try {
-      const wallet         = paymentWallet(seed, addr.hdIndex)
-      const currentBalance = await getBalance(addr.address)
-      if (currentBalance.eq(0)) { console.log('  Balance is 0 now, skipping.'); continue }
-      const rawTx  = await buildSweepTx(wallet, hotAddr, currentBalance, freshFees)
-      const txHash = await sendRaw(rawTx)
-      console.log(`  Done. TxHash: ${txHash}`)
-      ok++
-    } catch (err) {
-      console.error(`  Error: ${err.message}`)
-      fail++
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    process.stdout.write(`[${i + 1}/${rows.length}] ${row.to_address} ... `)
+
+    const balance  = await getBalance(row.to_address)
+    const afterGas = balance.minus(gasCostWei)
+
+    if (balance.gt(DUST_THRESHOLD_WEI) && afterGas.gt(0)) {
+      console.log(`${balance.div(1e18).toFixed(8)} ETH — sweeping...`)
+      try {
+        const freshFees = await getCurrentFees()
+        const wallet    = paymentWallet(seed, row.hd_index)
+        const rawTx     = await buildSweepTx(wallet, hotAddr, balance, freshFees)
+        const txHash    = await sendRaw(rawTx)
+        console.log(`  -> ${txHash}`)
+        ok++
+        await delay(SWEEP_DELAY_MS)
+      } catch (err) {
+        console.error(`  -> Error: ${err.message}`)
+        fail++
+      }
+    } else {
+      console.log(`${balance.div(1e18).toFixed(8)} ETH (skip)`)
     }
-    await delay(SWEEP_DELAY_MS)
+
+    if (i < rows.length - 1) await delay(CHECK_DELAY_MS)
   }
 
   console.log(`\nDone. Swept: ${ok}, Failed: ${fail}`)

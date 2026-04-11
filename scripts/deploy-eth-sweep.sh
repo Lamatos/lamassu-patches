@@ -40,12 +40,7 @@ const ETH_TRANSFER_GAS     = 21000
 const CHAIN_ID             = 1
 const DUST_THRESHOLD_WEI   = BN('1000000000000000') // 0.001 ETH
 
-// How many addresses to check in a single Infura batch request.
-// Each address = 1 request toward Infura rate limit even inside a batch.
-// 50 per batch with a 5s delay = 10 req/sec — safe for any Infura plan.
-// Increase BATCH_SIZE / reduce BATCH_DELAY_MS if you are on a higher-tier plan.
 const BATCH_SIZE      = 50
-// Delay between batches (ms). 5000ms at batch size 50 = 10 calls/sec.
 const BATCH_DELAY_MS  = 5000
 // Delay between sweep transactions.
 const SWEEP_DELAY_MS  = 2000

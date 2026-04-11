@@ -39,9 +39,9 @@ const ETH_TRANSFER_GAS     = 21000
 const CHAIN_ID             = 1
 const DUST_THRESHOLD_WEI   = BN('1000000000000000') // 0.001 ETH
 
-const CONCURRENT     = 10    // parallel getBalance calls per group
-const CHECK_DELAY_MS = 1000  // delay between groups (10 calls/sec — safe for any Infura plan)
-const SWEEP_DELAY_MS = 2000  // delay between sweep transactions
+const CONCURRENT     = 10
+const CHECK_DELAY_MS = 2000
+const SWEEP_DELAY_MS = 2000
 
 const MNEMONIC_PATH = process.env.MNEMONIC_PATH
 const web3 = new Web3()

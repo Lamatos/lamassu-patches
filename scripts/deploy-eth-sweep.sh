@@ -12,14 +12,14 @@
 # =============================================================================
 set -e
 
-INSTALL_DIR="/opt/lamassu-tools"
+INSTALL_DIR="/usr/lib/node_modules/lamassu-server"
 SCRIPT_PATH="$INSTALL_DIR/eth-cashout-sweep.js"
 BIN_PATH="/usr/local/bin/lamassu-eth-sweep"
 SERVER_ROOT="/usr/lib/node_modules/lamassu-server"
 
 # ---- Guards -----------------------------------------------------------------
 if [ "$EUID" -ne 0 ]; then
-  echo "ERROR: Please run as root (sudo)."
+  echo "ERROR: Must be run as root."
   exit 1
 fi
 
@@ -37,7 +37,7 @@ fi
 
 # ---- Install ----------------------------------------------------------------
 echo "Installing Lamassu ETH cash-out sweep tool..."
-mkdir -p "$INSTALL_DIR"
+# No mkdir needed — we write directly into the server root
 
 # Write the Node.js sweep script
 cat > "$SCRIPT_PATH" << 'NODEJS_SCRIPT'
@@ -319,10 +319,9 @@ cat > "$BIN_PATH" << 'LAUNCHER'
 set -e
 
 SERVER_ROOT="/usr/lib/node_modules/lamassu-server"
-SCRIPT_PATH="/opt/lamassu-tools/eth-cashout-sweep.js"
 
 if [ "$EUID" -ne 0 ]; then
-  echo "ERROR: Please run as root: sudo lamassu-eth-sweep"
+  echo "ERROR: Must be run as root."
   exit 1
 fi
 
@@ -331,10 +330,9 @@ set -a
 source "$SERVER_ROOT/.env"
 set +a
 
-# cd to server root so node resolves modules from its own node_modules
+# Run from server root so require('./lib/...') resolves correctly
 cd "$SERVER_ROOT"
-
-exec node "$SCRIPT_PATH"
+exec node eth-cashout-sweep.js
 LAUNCHER
 
 chmod +x "$BIN_PATH"
@@ -344,8 +342,8 @@ echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║       lamassu-eth-sweep installed successfully       ║"
 echo "╠══════════════════════════════════════════════════════╣"
-echo "║  Script:    /opt/lamassu-tools/eth-cashout-sweep.js  ║"
-echo "║  Command:   sudo lamassu-eth-sweep                   ║"
+echo "║  Script:    $SERVER_ROOT/eth-cashout-sweep.js        ║"
+echo "║  Command:   lamassu-eth-sweep                        ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
-echo "Run it now with:  sudo lamassu-eth-sweep"
+echo "Run it now with:  lamassu-eth-sweep"

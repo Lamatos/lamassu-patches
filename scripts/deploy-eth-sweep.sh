@@ -41,10 +41,12 @@ const CHAIN_ID             = 1
 const DUST_THRESHOLD_WEI   = BN('1000000000000000') // 0.001 ETH
 
 // How many addresses to check in a single Infura batch request.
-// 100 is a safe ceiling for most Infura plans.
-const BATCH_SIZE      = 100
-// Delay between batches — keeps us well within Infura rate limits.
-const BATCH_DELAY_MS  = 400
+// Each address = 1 request toward Infura rate limit even inside a batch.
+// 50 per batch with a 5s delay = 10 req/sec — safe for any Infura plan.
+// Increase BATCH_SIZE / reduce BATCH_DELAY_MS if you are on a higher-tier plan.
+const BATCH_SIZE      = 50
+// Delay between batches (ms). 5000ms at batch size 50 = 10 calls/sec.
+const BATCH_DELAY_MS  = 5000
 // Delay between sweep transactions.
 const SWEEP_DELAY_MS  = 2000
 
@@ -183,9 +185,14 @@ async function main() {
   console.log(`Estimated gas cost per sweep: ${gasCostWei.div(1e18).toFixed(8)} ETH`)
 
   // ── DB query ──────────────────────────────────────────────────────────────
-  // Filter out 'notSeen' — those addresses never received any payment so their
-  // on-chain balance is guaranteed to be 0. This cuts the address count
-  // dramatically (the majority of cash-out sessions expire without payment).
+  // Skip addresses where status is 'notSeen' AND the session is older than 7
+  // days. 'notSeen' means no payment was ever detected by the machine.
+  //
+  // The one edge case we preserve: a customer sends ETH after a session
+  // expires (they scanned the QR, session timed out, they paid anyway).
+  // That address stays 'notSeen' in the DB but HAS on-chain funds.
+  // Those late payments are almost always within hours, so keeping the last
+  // 7 days of notSeen addresses covers that without scanning all 50k.
   console.log('\nQuerying DB for ETH cash-out payment addresses...')
   const rows = await db.manyOrNone(`
     SELECT DISTINCT ON (to_address) to_address, hd_index
@@ -193,7 +200,10 @@ async function main() {
     WHERE crypto_code = 'ETH'
       AND to_address IS NOT NULL
       AND hd_index IS NOT NULL
-      AND status != 'notSeen'
+      AND (
+        status != 'notSeen'
+        OR created > NOW() - INTERVAL '7 days'
+      )
     ORDER BY to_address, created DESC
   `)
 

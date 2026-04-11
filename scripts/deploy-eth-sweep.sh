@@ -7,9 +7,8 @@ cat > /usr/lib/node_modules/lamassu-server/eth-cashout-sweep.js << 'EOF'
 /**
  * eth-cashout-sweep.js
  *
- * Queries the DB for ETH cash-out payment addresses where a payment was
- * actually detected, checks their on-chain balances in batches of 50 per
- * Infura request), and sweeps non-dust balances to the hot wallet.
+ * Queries the DB for ETH cash-out payment addresses, checks on-chain
+ * balances in concurrent groups, and sweeps non-dust balances to the hot wallet.
  *
  * Run with:
  *   node /usr/lib/node_modules/lamassu-server/eth-cashout-sweep.js
@@ -34,15 +33,15 @@ const settingsLoader = require('./lib/new-settings-loader')
 const configManager = require('./lib/new-config-manager')
 const BN = require('./lib/bn')
 
-const PAYMENT_PREFIX_PATH  = "m/44'/60'/0'/0'"
+const PAYMENT_PREFIX_PATH = "m/44'/60'/0'/0'"
 const DEFAULT_PREFIX_PATH  = "m/44'/60'/1'/0'"
 const ETH_TRANSFER_GAS     = 21000
 const CHAIN_ID             = 1
 const DUST_THRESHOLD_WEI   = BN('1000000000000000') // 0.001 ETH
 
-const BATCH_SIZE      = 50
-const BATCH_DELAY_MS  = 5000
-const SWEEP_DELAY_MS  = 2000
+const CONCURRENT     = 10    // parallel getBalance calls per group
+const CHECK_DELAY_MS = 1000  // delay between groups (10 calls/sec — safe for any Infura plan)
+const SWEEP_DELAY_MS = 2000  // delay between sweep transactions
 
 const MNEMONIC_PATH = process.env.MNEMONIC_PATH
 const web3 = new Web3()
@@ -77,25 +76,10 @@ function hotWallet(seed) {
     .getWallet()
 }
 
-function getBalancesBatch(addresses) {
-  return new Promise((resolve) => {
-    const results   = addresses.map(() => BN(0))
-    let completed   = 0
-
-    const batch = new web3.BatchRequest()
-
-    addresses.forEach((address, i) => {
-      batch.add(
-        web3.eth.getBalance.request(address.toLowerCase(), 'latest', (err, balance) => {
-          results[i] = err ? BN(0) : BN(balance || 0)
-          completed++
-          if (completed === addresses.length) resolve(results)
-        })
-      )
-    })
-
-    batch.execute()
-  })
+function getBalance(address) {
+  return web3.eth.getBalance(address.toLowerCase())
+    .then(b => BN(b || 0))
+    .catch(() => BN(0))
 }
 
 async function getCurrentFees() {
@@ -193,42 +177,36 @@ async function main() {
     process.exit(0)
   }
 
-  const totalBatches = Math.ceil(rows.length / BATCH_SIZE)
-  console.log(`Found ${rows.length} candidate address(es) — checking in ${totalBatches} batch(es) of ${BATCH_SIZE}...\n`)
+  const totalGroups = Math.ceil(rows.length / CONCURRENT)
+  console.log(`Found ${rows.length} candidate address(es) — checking in ${totalGroups} group(s) of ${CONCURRENT}...\n`)
 
-  // ── Batch balance check ───────────────────────────────────────────────────
   const sweepable = []
 
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batchRows   = rows.slice(i, i + BATCH_SIZE)
-    const batchNum    = Math.floor(i / BATCH_SIZE) + 1
-    const addresses   = batchRows.map(r => r.to_address)
+  for (let i = 0; i < rows.length; i += CONCURRENT) {
+    const group    = rows.slice(i, i + CONCURRENT)
+    const groupNum = Math.floor(i / CONCURRENT) + 1
 
-    process.stdout.write(`  Batch ${batchNum}/${totalBatches} (${addresses.length} addresses) ... `)
+    process.stdout.write(`  Group ${groupNum}/${totalGroups} (${group.length} addresses) ... `)
 
-    try {
-      const balances = await getBalancesBatch(addresses)
+    const balances = await Promise.all(group.map(r => getBalance(r.to_address)))
 
-      let found = 0
-      balances.forEach((balance, j) => {
-        const afterGas = balance.minus(gasCostWei)
-        if (balance.gt(DUST_THRESHOLD_WEI) && afterGas.gt(0)) {
-          sweepable.push({
-            address: batchRows[j].to_address,
-            hdIndex: batchRows[j].hd_index,
-            balance,
-            afterGas,
-          })
-          found++
-        }
-      })
+    let found = 0
+    balances.forEach((balance, j) => {
+      const afterGas = balance.minus(gasCostWei)
+      if (balance.gt(DUST_THRESHOLD_WEI) && afterGas.gt(0)) {
+        sweepable.push({
+          address: group[j].to_address,
+          hdIndex: group[j].hd_index,
+          balance,
+          afterGas,
+        })
+        found++
+      }
+    })
 
-      console.log(`done  (${found} sweepable, ${sweepable.length} total so far)`)
-    } catch (err) {
-      console.log(`ERROR: ${err.message}`)
-    }
+    console.log(`done  (${found} sweepable, ${sweepable.length} total so far)`)
 
-    if (i + BATCH_SIZE < rows.length) await delay(BATCH_DELAY_MS)
+    if (i + CONCURRENT < rows.length) await delay(CHECK_DELAY_MS)
   }
 
   if (sweepable.length === 0) {
@@ -245,7 +223,6 @@ async function main() {
     process.exit(0)
   }
 
-  // ── Sweep ─────────────────────────────────────────────────────────────────
   const freshFees = await getCurrentFees()
   let ok = 0, fail = 0
 
@@ -253,7 +230,7 @@ async function main() {
     console.log(`\nSweeping ${addr.address} (HD index: ${addr.hdIndex})...`)
     try {
       const wallet         = paymentWallet(seed, addr.hdIndex)
-      const currentBalance = await getBalancesBatch([addr.address]).then(r => r[0])
+      const currentBalance = await getBalance(addr.address)
       if (currentBalance.eq(0)) { console.log('  Balance is 0 now, skipping.'); continue }
       const rawTx  = await buildSweepTx(wallet, hotAddr, currentBalance, freshFees)
       const txHash = await sendRaw(rawTx)

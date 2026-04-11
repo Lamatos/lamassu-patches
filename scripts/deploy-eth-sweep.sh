@@ -325,9 +325,10 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Source server env (sets MNEMONIC_PATH, POSTGRES_* etc)
+# Load server env — only export KEY=VALUE lines (the .env is dotenv format,
+# not pure bash, so we filter it rather than sourcing directly)
 set -a
-source "$SERVER_ROOT/.env"
+source <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$SERVER_ROOT/.env")
 set +a
 
 # Run from server root so require('./lib/...') resolves correctly

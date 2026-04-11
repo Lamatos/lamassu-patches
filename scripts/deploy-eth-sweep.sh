@@ -8,7 +8,7 @@ cat > /usr/lib/node_modules/lamassu-server/eth-cashout-sweep.js << 'EOF'
  * eth-cashout-sweep.js
  *
  * Queries the DB for ETH cash-out payment addresses where a payment was
- * actually detected, checks their on-chain balances in batches (100 per
+ * actually detected, checks their on-chain balances in batches of 50 per
  * Infura request), and sweeps non-dust balances to the hot wallet.
  *
  * Run with:
@@ -42,7 +42,6 @@ const DUST_THRESHOLD_WEI   = BN('1000000000000000') // 0.001 ETH
 
 const BATCH_SIZE      = 50
 const BATCH_DELAY_MS  = 5000
-// Delay between sweep transactions.
 const SWEEP_DELAY_MS  = 2000
 
 const MNEMONIC_PATH = process.env.MNEMONIC_PATH
@@ -78,10 +77,6 @@ function hotWallet(seed) {
     .getWallet()
 }
 
-/**
- * Fetch ETH balances for a batch of addresses in a single JSON-RPC request.
- * Returns an array of BN values in the same order as the input.
- */
 function getBalancesBatch(addresses) {
   return new Promise((resolve) => {
     const results   = addresses.map(() => BN(0))
@@ -179,15 +174,6 @@ async function main() {
   const gasCostWei = fees.maxFeePerGas.times(ETH_TRANSFER_GAS)
   console.log(`Estimated gas cost per sweep: ${gasCostWei.div(1e18).toFixed(8)} ETH`)
 
-  // ── DB query ──────────────────────────────────────────────────────────────
-  // Skip addresses where status is 'notSeen' AND the session is older than 7
-  // days. 'notSeen' means no payment was ever detected by the machine.
-  //
-  // The one edge case we preserve: a customer sends ETH after a session
-  // expires (they scanned the QR, session timed out, they paid anyway).
-  // That address stays 'notSeen' in the DB but HAS on-chain funds.
-  // Those late payments are almost always within hours, so keeping the last
-  // 7 days of notSeen addresses covers that without scanning all 50k.
   console.log('\nQuerying DB for ETH cash-out payment addresses...')
   const rows = await db.manyOrNone(`
     SELECT DISTINCT ON (to_address) to_address, hd_index

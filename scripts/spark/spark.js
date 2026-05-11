@@ -13,7 +13,7 @@ const SUPPORTED_COINS = ['LN', 'USDB']
 const DEFAULT_NETWORK = 'MAINNET'
 const DEFAULT_USDB_TOKEN_IDENTIFIER =
   'btkn1xgrvjwey5ngcagvap2dzzvsy4uk8ua9x69k82dwvt5e7ef9drm9qztux87'
-const MAX_FEE_SATS = 500
+const DEFAULT_MAX_FEE_SATS = 2500
 const INVOICE_EXPIRY_SECONDS = 300
 const BACKGROUND_SYNC_COOLDOWN_MS = 60000
 const ADDRESS_UTXO_SCAN_CONCURRENCY = 16
@@ -42,6 +42,16 @@ function tokenIdentifierForAccount (account) {
     process.env.SPARK_USDB_TOKEN_IDENTIFIER ||
     DEFAULT_USDB_TOKEN_IDENTIFIER
   )
+}
+
+function maxFeeSatsForAccount (account) {
+  account = account || {}
+  const raw = account.maxFeeSats || process.env.SPARK_MAX_FEE_SATS
+  const parsed = Number(raw || DEFAULT_MAX_FEE_SATS)
+
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_MAX_FEE_SATS
 }
 
 function sdkPathForAccount (account) {
@@ -342,7 +352,7 @@ function sendCoins (account, tx) {
       const normalizedInvoice = stripLightningPrefix(invoice).toLowerCase()
       const payParams = {
         invoice: normalizedInvoice,
-        maxFeeSats: MAX_FEE_SATS,
+        maxFeeSats: maxFeeSatsForAccount(account),
         preferSpark: true,
       }
 

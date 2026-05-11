@@ -27,6 +27,7 @@ if [[ ! -d "$MACHINE_DIR" ]]; then
 fi
 
 COINS_DIR="$MACHINE_DIR/node_modules/@lamassu/coins/dist"
+BRAIN_FILE="$MACHINE_DIR/lib/brain.js"
 SCANNER_FILE="$MACHINE_DIR/lib/mocks/scanner.js"
 DEVICE_CONFIG="$MACHINE_DIR/device_config.json"
 if [[ ! -d "$COINS_DIR" ]]; then
@@ -134,6 +135,47 @@ replaceOnce(
   'var PLUGINS = { BTC: btc_1.default, ETH: eth_1.default, ZEC: zec_1.default, LTC: ltc_1.default, DASH: dash_1.default, BCH: bch_1.default, XMR: xmr_1.default, TRX: trx_1.default, LN: ln_1.default, USDB: usdb_1.default };\n',
 )
 NODE
+
+if [[ -f "$BRAIN_FILE" ]]; then
+node - "$BRAIN_FILE" <<'NODE'
+const fs = require('fs')
+
+const brainFile = process.argv[2]
+let text = fs.readFileSync(brainFile, 'utf8')
+
+if (!text.includes('function normalizeDepositAddress')) {
+  text = text.replace(
+    'Brain.prototype.commitCashOutTx = function commitCashOutTx () {\n',
+    `function normalizeDepositAddress (address) {
+  if (!address || typeof address !== 'object') return address
+  return address.toAddress || address.address || address.layer2Address || address.walletId
+}
+
+Brain.prototype.commitCashOutTx = function commitCashOutTx () {
+`,
+  )
+}
+
+text = text.replace(
+  `      const amountStr = this.toCryptoUnits(tx.cryptoAtoms, tx.cryptoCode).toString()
+      const depositUrl = coinUtils.depositUrl(tx.cryptoCode, tx.toAddress, amountStr)
+      const layer2Url = coinUtils.depositUrl(tx.cryptoCode, tx.layer2Address, amountStr)
+      const toAddress = coinUtils.formatAddress(tx.cryptoCode, tx.toAddress)
+      const layer2Address = coinUtils.formatAddress(tx.cryptoCode, tx.layer2Address)
+`,
+  `      const amountStr = this.toCryptoUnits(tx.cryptoAtoms, tx.cryptoCode).toString()
+      const rawToAddress = normalizeDepositAddress(tx.toAddress)
+      const rawLayer2Address = normalizeDepositAddress(tx.layer2Address) || rawToAddress
+      const depositUrl = coinUtils.depositUrl(tx.cryptoCode, rawToAddress, amountStr)
+      const layer2Url = coinUtils.depositUrl(tx.cryptoCode, rawLayer2Address, amountStr)
+      const toAddress = coinUtils.formatAddress(tx.cryptoCode, rawToAddress)
+      const layer2Address = coinUtils.formatAddress(tx.cryptoCode, rawLayer2Address)
+`,
+)
+
+fs.writeFileSync(brainFile, text)
+NODE
+fi
 
 if [[ -f "$SCANNER_FILE" ]]; then
 node - "$SCANNER_FILE" "$DEVICE_CONFIG" "$INSTALL_MOCK_SPARK_QR" <<'NODE'

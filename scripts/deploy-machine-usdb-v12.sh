@@ -28,6 +28,7 @@ fi
 
 COINS_DIR="$MACHINE_DIR/node_modules/@lamassu/coins/dist"
 BRAIN_FILE="$MACHINE_DIR/lib/brain.js"
+APP_FILE="$MACHINE_DIR/ui/js/app.js"
 SCANNER_FILE="$MACHINE_DIR/lib/mocks/scanner.js"
 DEVICE_CONFIG="$MACHINE_DIR/device_config.json"
 if [[ ! -d "$COINS_DIR" ]]; then
@@ -174,6 +175,72 @@ text = text.replace(
 )
 
 fs.writeFileSync(brainFile, text)
+NODE
+fi
+
+if [[ -f "$APP_FILE" ]]; then
+node - "$APP_FILE" <<'NODE'
+const fs = require('fs')
+
+const appFile = process.argv[2]
+let text = fs.readFileSync(appFile, 'utf8')
+
+if (!text.includes('function normalizeDepositPayload')) {
+  text = text.replace(
+    'function setDepositAddress (depositInfo) {\n',
+    `function normalizeDepositPayload (value) {
+  if (!value) return value
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (trimmed[0] !== '{') return value
+
+    try {
+      value = JSON.parse(trimmed)
+    } catch (err) {
+      return value
+    }
+  }
+
+  if (typeof value !== 'object') return value
+  return value.toAddress || value.address || value.layer2Address || value.walletId
+}
+
+function setDepositAddress (depositInfo) {
+`,
+  )
+}
+
+const oldSetDepositAddress = `function setDepositAddress (depositInfo) {
+  $('.deposit_state .loading').hide()
+  $('.deposit_state .send-notice .crypto-address').html(formatAddress(depositInfo.toAddress))
+  $('.deposit_state .send-notice').show()
+
+  qrize(depositInfo.depositUrl, $('#qr-code-deposit'), CASH_OUT_QR_COLOR)
+  qrize(depositInfo.toAddress, $('#qr-code-deposit-address'), CASH_OUT_QR_COLOR)
+}
+`
+
+const newSetDepositAddress = `function setDepositAddress (depositInfo) {
+  const toAddress = normalizeDepositPayload(depositInfo.toAddress)
+  const depositUrl = normalizeDepositPayload(depositInfo.depositUrl) || toAddress
+
+  $('.deposit_state .loading').hide()
+  $('.deposit_state .send-notice .crypto-address').html(formatAddress(toAddress))
+  $('.deposit_state .send-notice').show()
+
+  qrize(depositUrl, $('#qr-code-deposit'), CASH_OUT_QR_COLOR)
+  qrize(toAddress, $('#qr-code-deposit-address'), CASH_OUT_QR_COLOR)
+}
+`
+
+if (text.includes(oldSetDepositAddress)) {
+  text = text.replace(oldSetDepositAddress, newSetDepositAddress)
+} else if (!text.includes('const toAddress = normalizeDepositPayload(depositInfo.toAddress)')) {
+  throw new Error(`Patch anchor not found in ${appFile}: setDepositAddress`)
+}
+
+fs.writeFileSync(appFile, text)
 NODE
 fi
 

@@ -3,10 +3,18 @@ set -euo pipefail
 
 SERVER_DIR="${SERVER_DIR:-/usr/lib/node_modules/lamassu-server}"
 SDK_DIR="$SERVER_DIR/spark-sdk-install"
-SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_SOURCE="${BASH_SOURCE[0]-}"
+if [[ -n "$SCRIPT_SOURCE" && -f "$SCRIPT_SOURCE" ]]; then
+  SRC_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+else
+  SRC_DIR=""
+fi
 USDB_TOKEN_IDENTIFIER="${SPARK_USDB_TOKEN_IDENTIFIER:-btkn1xgrvjwey5ngcagvap2dzzvsy4uk8ua9x69k82dwvt5e7ef9drm9qztux87}"
 RAW_BASE="${SPARK_PATCH_RAW_BASE:-https://raw.githubusercontent.com/Lamatos/lamassu-patches/master/scripts/spark}"
-SPARK_PLUGIN_SRC="$SRC_DIR/lib/plugins/wallet/spark/spark.js"
+SPARK_PLUGIN_SRC=""
+if [[ -n "$SRC_DIR" ]]; then
+  SPARK_PLUGIN_SRC="$SRC_DIR/lib/plugins/wallet/spark/spark.js"
+fi
 TMP_DIR=""
 
 cleanup () {
@@ -32,7 +40,7 @@ npm install --prefix "$SDK_DIR" @buildonspark/spark-sdk@0.7.15 @lamassu/bolt11@1
 
 echo "Installing Spark wallet plugin..."
 mkdir -p "$SERVER_DIR/lib/plugins/wallet/spark"
-if [[ ! -f "$SPARK_PLUGIN_SRC" ]]; then
+if [[ -z "$SPARK_PLUGIN_SRC" || ! -f "$SPARK_PLUGIN_SRC" ]]; then
   TMP_DIR="$(mktemp -d)"
   SPARK_PLUGIN_SRC="$TMP_DIR/spark.js"
   curl -fsSL "$RAW_BASE/spark.js" -o "$SPARK_PLUGIN_SRC"
@@ -291,16 +299,33 @@ if (fs.existsSync(publicAssets)) {
 NODE
 
 echo "Seeding USDB wallet defaults..."
-if [[ -f /etc/lamassu/.env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  . /etc/lamassu/.env
-  set +a
-fi
-
 node - "$SERVER_DIR" <<'NODE'
+const fs = require('fs')
 const path = require('path')
 const serverDir = process.argv[2]
+
+const envFile = '/etc/lamassu/.env'
+if (fs.existsSync(envFile)) {
+  const lines = fs.readFileSync(envFile, 'utf8').split(/\r?\n/)
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(trimmed)
+    if (!match) continue
+
+    let value = match[2].trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+
+    process.env[match[1]] = value
+  }
+}
+
 const settingsLoader = require(path.join(serverDir, 'lib', 'new-settings-loader'))
 
 const config = {

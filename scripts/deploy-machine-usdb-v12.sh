@@ -148,6 +148,13 @@ if (!text.includes('function normalizeDepositAddress')) {
   text = text.replace(
     'Brain.prototype.commitCashOutTx = function commitCashOutTx () {\n',
     `function normalizeDepositAddress (address) {
+  if (typeof address === 'string' && address.trim()[0] === '{') {
+    try {
+      address = JSON.parse(address)
+    } catch (err) {
+      return address
+    }
+  }
   if (!address || typeof address !== 'object') return address
   return address.toAddress || address.address || address.layer2Address || address.walletId
 }
@@ -156,6 +163,26 @@ Brain.prototype.commitCashOutTx = function commitCashOutTx () {
 `,
   )
 }
+
+text = text.replace(
+  `function normalizeDepositAddress (address) {
+  if (!address || typeof address !== 'object') return address
+  return address.toAddress || address.address || address.layer2Address || address.walletId
+}
+`,
+  `function normalizeDepositAddress (address) {
+  if (typeof address === 'string' && address.trim()[0] === '{') {
+    try {
+      address = JSON.parse(address)
+    } catch (err) {
+      return address
+    }
+  }
+  if (!address || typeof address !== 'object') return address
+  return address.toAddress || address.address || address.layer2Address || address.walletId
+}
+`,
+)
 
 text = text.replace(
   `      const amountStr = this.toCryptoUnits(tx.cryptoAtoms, tx.cryptoCode).toString()
@@ -234,10 +261,17 @@ const newSetDepositAddress = `function setDepositAddress (depositInfo) {
 }
 `
 
-if (text.includes(oldSetDepositAddress)) {
+if (text.includes('const toAddress = normalizeDepositPayload(depositInfo.toAddress)')) {
+  // Already patched.
+} else if (text.includes(oldSetDepositAddress)) {
   text = text.replace(oldSetDepositAddress, newSetDepositAddress)
-} else if (!text.includes('const toAddress = normalizeDepositPayload(depositInfo.toAddress)')) {
-  throw new Error(`Patch anchor not found in ${appFile}: setDepositAddress`)
+} else {
+  const compactPattern = /function setDepositAddress \(depositInfo\) \{[\s\S]*?qrize\(depositInfo\.toAddress, \$\('#qr-code-deposit-address'\), CASH_OUT_QR_COLOR\)\n\}/
+  if (compactPattern.test(text)) {
+    text = text.replace(compactPattern, newSetDepositAddress.trim())
+  } else {
+    console.log(`Skipping optional UI QR patch; ${appFile} does not match known v12 layouts.`)
+  }
 }
 
 fs.writeFileSync(appFile, text)

@@ -273,6 +273,24 @@ function parseAddressAndId (compositeAddress) {
   }
 }
 
+function normalizeAddressPayload (value) {
+  if (!value) return value
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (trimmed[0] !== '{') return value
+
+    try {
+      value = JSON.parse(trimmed)
+    } catch (err) {
+      return value
+    }
+  }
+
+  if (typeof value !== 'object') return value
+  return value.walletId || value.layer2Address || value.toAddress || value.address
+}
+
 function stripLightningPrefix (address) {
   if (typeof address !== 'string') return address
   return address.toLowerCase().startsWith('lightning:')
@@ -436,9 +454,12 @@ function getStatus (account, tx, requested) {
     .then(() => getWalletInstance(account))
     .then(wallet => {
       if (tx.cryptoCode === 'LN') {
-        const normalizedAddress = stripLightningPrefix(tx.toAddress || '')
+        const normalizedAddress = stripLightningPrefix(normalizeAddressPayload(tx.toAddress) || '')
         const { requestId: legacyRequestId } = parseAddressAndId(normalizedAddress)
-        const requestId = tx.walletId || tx.layer2Address || legacyRequestId
+        const requestId =
+          normalizeAddressPayload(tx.walletId) ||
+          normalizeAddressPayload(tx.layer2Address) ||
+          legacyRequestId
 
         if (!requestId) {
           return { receivedCryptoAtoms: BN(0), status: 'notSeen' }
@@ -462,7 +483,11 @@ function getStatus (account, tx, requested) {
         })
       }
 
-      const sparkInvoice = tx.walletId || tx.layer2Address || tx.toAddress
+      const sparkInvoice =
+        normalizeAddressPayload(tx.walletId) ||
+        normalizeAddressPayload(tx.layer2Address) ||
+        normalizeAddressPayload(tx.toAddress)
+
       return wallet.querySparkInvoices([sparkInvoice]).then(result => {
         const invoiceStatus = (result.invoiceStatuses || []).find(
           it => it.invoice === sparkInvoice,

@@ -76,6 +76,7 @@ const utils = path.join(coinsRoot, 'utils.js')
 const lightUtils = path.join(coinsRoot, 'lightUtils.js')
 const ticker = path.join(serverDir, 'lib', 'ticker.js')
 const accounts = path.join(serverDir, 'lib', 'new-admin', 'config', 'accounts.js')
+const wallet = path.join(serverDir, 'lib', 'wallet.js')
 
 replaceOnce(
   consts,
@@ -226,6 +227,46 @@ tickerText = tickerText.replace(
   'return sparkUsdbTicker(fiatCode, cryptoCode)',
 )
 fs.writeFileSync(ticker, tickerText)
+
+let walletText = fs.readFileSync(wallet, 'utf8')
+if (!walletText.includes('function normalizeWalletAddressResult')) {
+  walletText = walletText.replace(
+    'function newAddress(settings, info, tx) {\n',
+    `function normalizeWalletAddressResult(walletAddress, layer2Address) {
+  if (!walletAddress || typeof walletAddress !== 'object') {
+    return { toAddress: walletAddress, layer2Address }
+  }
+
+  return {
+    toAddress: walletAddress.toAddress || walletAddress.address,
+    layer2Address:
+      walletAddress.layer2Address || walletAddress.walletId || layer2Address,
+  }
+}
+
+function newAddress(settings, info, tx) {
+`,
+  )
+}
+
+walletText = walletText.replace(
+  `  return Promise.all([
+    walletAddressPromise,
+    layer2.newAddress(settings, info),
+  ]).then(([toAddress, layer2Address]) => ({
+    toAddress,
+    layer2Address,
+  }))
+`,
+  `  return Promise.all([
+    walletAddressPromise,
+    layer2.newAddress(settings, info),
+  ]).then(([toAddress, layer2Address]) =>
+    normalizeWalletAddressResult(toAddress, layer2Address),
+  )
+`,
+)
+fs.writeFileSync(wallet, walletText)
 
 let accountsText = fs.readFileSync(accounts, 'utf8')
 if (!accountsText.includes('USDB')) {

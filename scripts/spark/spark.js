@@ -331,7 +331,10 @@ function isZeroAmountLightningInvoice (invoice) {
 
 function shouldRetryWithoutSparkPreference (err) {
   const message = err && err.message ? err.message : String(err)
-  return message.includes('timelock interval is less than or equal to 0')
+  return (
+    message.includes('timelock interval is less than or equal to 0') ||
+    message.includes('Invoice network: null does not match wallet network')
+  )
 }
 
 function payLightningInvoiceWithFallback (wallet, payParams) {

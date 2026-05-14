@@ -9,7 +9,7 @@ try {
 }
 
 const NAME = 'spark'
-const SUPPORTED_COINS = ['LN', 'USDB']
+const SUPPORTED_COINS = ['BTC', 'LN', 'USDB']
 const DEFAULT_NETWORK = 'MAINNET'
 const DEFAULT_USDB_TOKEN_IDENTIFIER =
   'btkn1xgrvjwey5ngcagvap2dzzvsy4uk8ua9x69k82dwvt5e7ef9drm9qztux87'
@@ -154,10 +154,32 @@ function firstDefined (values) {
   }
 }
 
+function isSparkAddress (address) {
+  if (typeof address !== 'string') return false
+  const lower = address.toLowerCase()
+  return (
+    lower.startsWith('spark1') ||
+    lower.startsWith('sparkrt1') ||
+    lower.startsWith('sprt1')
+  )
+}
+
 function assertSparkAddress (address) {
-  if (typeof address !== 'string' || !address.toLowerCase().startsWith('spark1')) {
+  if (!isSparkAddress(address)) {
     throw new Error('Invalid Spark address')
   }
+}
+
+function safeSatsAmount (cryptoAtoms) {
+  const amountSats = cryptoAtoms.toNumber()
+  if (
+    !Number.isSafeInteger(amountSats) ||
+    amountSats <= 0
+  ) {
+    throw new Error('Invalid Spark BTC amount')
+  }
+
+  return amountSats
 }
 
 function isSparkInvoiceFinalized (invoiceStatus) {
@@ -368,6 +390,27 @@ function sendCoins (account, tx) {
         .then(result => {
           if (!result) throw new Error('Spark: empty result from payLightningInvoice')
           return '<spark lightning transaction>'
+        })
+    }
+
+    if (cryptoCode === 'BTC') {
+      return Promise.resolve()
+        .then(() => {
+          assertSparkAddress(toAddress)
+          return getWalletInstance(account)
+        })
+        .then(wallet =>
+          wallet.transfer({
+            receiverSparkAddress: toAddress,
+            amountSats: safeSatsAmount(cryptoAtoms),
+          }),
+        )
+        .then(result => {
+          if (typeof result === 'string') return result
+          return (
+            (result && (result.id || result.txid || result.txId)) ||
+            '<spark btc transfer>'
+          )
         })
     }
 

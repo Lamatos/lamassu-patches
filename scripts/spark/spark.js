@@ -369,6 +369,15 @@ function payLightningInvoiceWithFallback (wallet, payParams) {
   })
 }
 
+function isSparkInvoiceTransferError (err) {
+  const message = err && err.message ? err.message : String(err)
+  return message.includes('Use fulfillSparkInvoice instead')
+}
+
+function fulfillSparkInvoice (wallet, invoice, amount) {
+  return wallet.fulfillSparkInvoice([{ invoice, amount }])
+}
+
 function sendCoins (account, tx) {
   const { toAddress, cryptoAtoms, cryptoCode } = tx
   return checkCryptoCode(cryptoCode).then(() => {
@@ -403,6 +412,9 @@ function sendCoins (account, tx) {
           wallet.transfer({
             receiverSparkAddress: toAddress,
             amountSats: safeSatsAmount(cryptoAtoms),
+          }).catch(err => {
+            if (!isSparkInvoiceTransferError(err)) throw err
+            return fulfillSparkInvoice(wallet, toAddress, BigInt(safeSatsAmount(cryptoAtoms)))
           }),
         )
         .then(result => {
@@ -424,6 +436,9 @@ function sendCoins (account, tx) {
           tokenIdentifier: tokenIdentifierForAccount(account),
           tokenAmount: BigInt(cryptoAtoms.toFixed(0)),
           receiverSparkAddress: toAddress,
+        }).catch(err => {
+          if (!isSparkInvoiceTransferError(err)) throw err
+          return fulfillSparkInvoice(wallet, toAddress, BigInt(cryptoAtoms.toFixed(0)))
         }),
       )
       .then(result => {

@@ -77,6 +77,7 @@ const lightUtils = path.join(coinsRoot, 'lightUtils.js')
 const ticker = path.join(serverDir, 'lib', 'ticker.js')
 const accounts = path.join(serverDir, 'lib', 'new-admin', 'config', 'accounts.js')
 const wallet = path.join(serverDir, 'lib', 'wallet.js')
+const sendCoinsBin = path.join(serverDir, 'bin', 'lamassu-send-coins')
 
 replaceOnce(
   consts,
@@ -229,6 +230,16 @@ tickerText = tickerText.replace(
 fs.writeFileSync(ticker, tickerText)
 
 let walletText = fs.readFileSync(wallet, 'utf8')
+if (!walletText.includes('function fetchWalletByPlugin')) {
+  walletText = walletText.replace(
+    'function fetchWallet(settings, cryptoCode) {\n  return fs.readFile(MNEMONIC_PATH, \'utf8\').then(mnemonic => {\n    const masterSeed = mnemonicHelpers.toEntropyBuffer(mnemonic)\n    const plugin = configManager.getWalletSettings(\n      cryptoCode,\n      settings.config,\n    ).wallet\n',
+    'function fetchWalletByPlugin(settings, plugin) {\n  return fs.readFile(MNEMONIC_PATH, \'utf8\').then(mnemonic => {\n    const masterSeed = mnemonicHelpers.toEntropyBuffer(mnemonic)\n',
+  )
+  walletText = walletText.replace(
+    '}\n\nconst lastBalance = {}\n',
+    '}\n\nfunction fetchWallet(settings, cryptoCode) {\n  const plugin = configManager.getWalletSettings(\n    cryptoCode,\n    settings.config,\n  ).wallet\n  return fetchWalletByPlugin(settings, plugin)\n}\n\nconst lastBalance = {}\n',
+  )
+}
 if (!walletText.includes('function normalizeWalletAddressResult')) {
   walletText = walletText.replace(
     'function newAddress(settings, info, tx) {\n',
@@ -266,7 +277,87 @@ walletText = walletText.replace(
   )
 `,
 )
+if (!walletText.includes('function sendCoinsWithWallet')) {
+  walletText = walletText.replace(
+    'function sendCoinsBatch(settings, txs, cryptoCode) {\n',
+    `function sendCoinsWithWallet(settings, walletPlugin, tx) {
+  return fetchWalletByPlugin(settings, walletPlugin)
+    .then(r => {
+      const feeMultiplier = new BN(
+        configManager.getWalletSettings(
+          tx.cryptoCode,
+          settings.config,
+        ).feeMultiplier,
+      )
+      return r.wallet
+        .sendCoins(r.account, tx, settings, feeMultiplier)
+        .then(res => {
+          mem.clear(module.exports.balance)
+          return res
+        })
+    })
+    .catch(err => {
+      if (err.name === INSUFFICIENT_FUNDS_NAME) {
+        throw httpError(INSUFFICIENT_FUNDS_NAME, INSUFFICIENT_FUNDS_CODE)
+      }
+      throw err
+    })
+}
+
+function sendCoinsBatch(settings, txs, cryptoCode) {
+`,
+  )
+}
+
+if (!walletText.includes('sendCoinsWithWallet,')) {
+  walletText = walletText.replace(
+    '  sendCoins,\n',
+    '  sendCoins,\n  sendCoinsWithWallet,\n',
+  )
+}
 fs.writeFileSync(wallet, walletText)
+
+let sendCoinsText = fs.readFileSync(sendCoinsBin, 'utf8')
+if (!sendCoinsText.includes('function isSparkAddress')) {
+  sendCoinsText = sendCoinsText.replace(
+    'const [toAddress, cryptoValue, cryptoCode] = process.argv.slice(2)\n',
+    `const [toAddress, cryptoValue, cryptoCode] = process.argv.slice(2)
+
+function isSparkAddress (address) {
+  if (typeof address !== 'string') return false
+  const lower = address.toLowerCase()
+  return (
+    lower.startsWith('spark1') ||
+    lower.startsWith('sparkrt1') ||
+    lower.startsWith('sprt1')
+  )
+}
+`,
+  )
+}
+
+if (!sendCoinsText.includes('const useSparkWallet = cryptoCode')) {
+  sendCoinsText = sendCoinsText.replace(
+    '    const fiatCode = configManager.getGlobalLocale(settings.config).fiatCurrency\n\n    return wallet.isStrictAddress(settings, cryptoCode, toAddress)\n',
+    '    const fiatCode = configManager.getGlobalLocale(settings.config).fiatCurrency\n    const useSparkWallet = cryptoCode === \'BTC\' && isSparkAddress(toAddress)\n\n    return (useSparkWallet\n      ? Promise.resolve(true)\n      : wallet.isStrictAddress(settings, cryptoCode, toAddress))\n',
+  )
+}
+
+if (!sendCoinsText.includes("wallet.sendCoinsWithWallet(settings, 'spark', tx)")) {
+  sendCoinsText = sendCoinsText.replace(
+    '            console.log(\'Sending...\')\n            return wallet.sendCoins(settings, { toAddress, cryptoAtoms, cryptoCode })\n',
+    `            console.log('Sending...')
+            const tx = { toAddress, cryptoAtoms, cryptoCode }
+            const sendPromise = useSparkWallet
+              ? wallet.sendCoinsWithWallet(settings, 'spark', tx)
+              : wallet.sendCoins(settings, tx)
+
+            return sendPromise
+`,
+  )
+}
+
+fs.writeFileSync(sendCoinsBin, sendCoinsText)
 
 let accountsText = fs.readFileSync(accounts, 'utf8')
 if (!accountsText.includes('USDB')) {

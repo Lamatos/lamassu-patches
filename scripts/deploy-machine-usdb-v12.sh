@@ -28,6 +28,7 @@ fi
 
 COINS_DIR="$MACHINE_DIR/node_modules/@lamassu/coins/dist"
 BRAIN_FILE="$MACHINE_DIR/lib/brain.js"
+TRADER_FILE="$MACHINE_DIR/lib/trader.js"
 APP_FILE="$MACHINE_DIR/ui/js/app.js"
 SCANNER_FILE="$MACHINE_DIR/lib/mocks/scanner.js"
 DEVICE_CONFIG="$MACHINE_DIR/device_config.json"
@@ -202,6 +203,45 @@ text = text.replace(
 )
 
 fs.writeFileSync(brainFile, text)
+NODE
+fi
+
+if [[ -f "$TRADER_FILE" ]]; then
+node - "$TRADER_FILE" <<'NODE'
+const fs = require('fs')
+
+const traderFile = process.argv[2]
+let text = fs.readFileSync(traderFile, 'utf8')
+
+if (!text.includes('const LN_DISPENSE_TIMEOUT =')) {
+  text = text.replace(
+    'const DISPENSE_TIMEOUT = 120000\n',
+    'const DISPENSE_TIMEOUT = 120000\nconst LN_DISPENSE_TIMEOUT = 5 * 60 * 1000\n',
+  )
+}
+
+if (!text.includes('const dispenseTimeout =')) {
+  text = text.replace(
+    `Trader.prototype.waitForDispense = function waitForDispense (tx, status) {
+  let processing = false
+  let timedout = false
+  const t0 = Date.now()
+`,
+    `Trader.prototype.waitForDispense = function waitForDispense (tx, status) {
+  let processing = false
+  let timedout = false
+  const t0 = Date.now()
+  const dispenseTimeout = tx.cryptoCode === 'LN' ? LN_DISPENSE_TIMEOUT : DISPENSE_TIMEOUT
+`,
+  )
+}
+
+text = text.replace(
+  '      if (Date.now() - t0 > DISPENSE_TIMEOUT) {\n',
+  '      if (Date.now() - t0 > dispenseTimeout) {\n',
+)
+
+fs.writeFileSync(traderFile, text)
 NODE
 fi
 

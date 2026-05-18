@@ -7,49 +7,63 @@ TS_DIR="tailscale_${TS_VERSION}_${TS_ARCH}"
 TS_TGZ="${TS_DIR}.tgz"
 TS_URL="https://pkgs.tailscale.com/stable/${TS_TGZ}"
 
-echo "[+] Installing Tailscale static binary for old Debian/Ubilinux..."
+echo "[+] Installing Tailscale for old Ubilinux/Debian..."
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "[!] Please run as root or with sudo:"
-  echo "    sudo bash $0"
-  exit 1
+    echo "[!] Please run with sudo:"
+    echo "curl -fsSL YOUR_URL | sudo bash"
+    exit 1
 fi
 
 mkdir -p /var/lib/tailscale
+mkdir -p /var/run/tailscale
 mkdir -p /usr/local/bin
+
+echo "[+] Cleaning old Tailscale processes..."
+pkill -9 tailscaled 2>/dev/null || true
+pkill -9 tailscale 2>/dev/null || true
+
+echo "[+] Removing stale interface..."
+ip link delete tailscale0 2>/dev/null || true
+
 cd /tmp
+rm -rf "$TS_DIR" "$TS_TGZ"
 
 echo "[+] Downloading Tailscale ${TS_VERSION}..."
-rm -rf "$TS_DIR" "$TS_TGZ"
 wget -q --show-progress "$TS_URL"
 
 echo "[+] Extracting..."
 tar xzf "$TS_TGZ"
 
 echo "[+] Installing binaries..."
-cp "$TS_DIR/tailscale" /usr/local/bin/tailscale
-cp "$TS_DIR/tailscaled" /usr/local/bin/tailscaled
-chmod +x /usr/local/bin/tailscale /usr/local/bin/tailscaled
+cp "$TS_DIR/tailscale" /usr/local/bin/
+cp "$TS_DIR/tailscaled" /usr/local/bin/
+chmod +x /usr/local/bin/tailscale
+chmod +x /usr/local/bin/tailscaled
 
-echo "[+] Stopping old tailscaled if running..."
-pkill tailscaled 2>/dev/null || true
+echo "[+] Starting daemon..."
 
-echo "[+] Starting tailscaled..."
 nohup /usr/local/bin/tailscaled \
   --state=/var/lib/tailscale/tailscaled.state \
+  --socket=/var/run/tailscale/tailscaled.sock \
   >/var/log/tailscaled.log 2>&1 &
 
-sleep 3
+sleep 5
 
-echo
-echo "[✓] Tailscale installed."
-echo
-echo "Now run this with your auth key:"
-echo
-echo "  sudo /usr/local/bin/tailscale up --authkey YOUR_AUTHKEY --ssh"
-echo
-echo "Then check status with:"
-echo
-echo "  /usr/local/bin/tailscale status"
-echo "  /usr/local/bin/tailscale ip -4"
-echo
+if pgrep tailscaled >/dev/null; then
+    echo
+    echo "[✓] Tailscaled is running"
+    echo
+    echo "Run this now:"
+    echo
+    echo "sudo /usr/local/bin/tailscale \\"
+    echo "--socket=/var/run/tailscale/tailscaled.sock \\"
+    echo "up --authkey YOUR_AUTHKEY --ssh"
+    echo
+else
+    echo "[!] tailscaled failed"
+    echo
+    echo "Check:"
+    echo "cat /var/log/tailscaled.log"
+    exit 1
+fi

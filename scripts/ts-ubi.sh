@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TS_VERSION="1.90.6"
+TS_VERSION="1.98.2"
 TS_ARCH="amd64"
 TS_DIR="tailscale_${TS_VERSION}_${TS_ARCH}"
 TS_TGZ="${TS_DIR}.tgz"

@@ -15,16 +15,24 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+echo "[+] Stopping any existing Tailscale services..."
+systemctl stop tailscaled 2>/dev/null || true
+service tailscaled stop 2>/dev/null || true
+
+echo "[+] Killing old Tailscale processes..."
+pkill -9 tailscaled 2>/dev/null || true
+pkill -9 tailscale 2>/dev/null || true
+sleep 2
+
+echo "[+] Cleaning old sockets/interfaces..."
+ip link delete tailscale0 2>/dev/null || true
+rm -f /var/run/tailscale/tailscaled.sock
+rm -f /run/tailscale/tailscaled.sock
+
+echo "[+] Creating directories..."
 mkdir -p /var/lib/tailscale
 mkdir -p /var/run/tailscale
 mkdir -p /usr/local/bin
-
-echo "[+] Cleaning old Tailscale processes..."
-pkill -9 tailscaled 2>/dev/null || true
-pkill -9 tailscale 2>/dev/null || true
-
-echo "[+] Removing stale tailscale0 interface..."
-ip link delete tailscale0 2>/dev/null || true
 
 cd /tmp
 rm -rf "$TS_DIR" "$TS_TGZ"
@@ -49,7 +57,7 @@ cat >/usr/local/bin/ts-up <<'EOF'
 EOF
 chmod +x /usr/local/bin/ts-up
 
-echo "[+] Starting tailscaled..."
+echo "[+] Starting fresh tailscaled ${TS_VERSION}..."
 nohup /usr/local/bin/tailscaled \
   --state=/var/lib/tailscale/tailscaled.state \
   --socket=/var/run/tailscale/tailscaled.sock \
@@ -57,25 +65,26 @@ nohup /usr/local/bin/tailscaled \
 
 sleep 5
 
-if pgrep tailscaled >/dev/null; then
-  echo
-  echo "[✓] Tailscale installed and daemon is running."
-  echo
-  echo "Now run:"
-  echo
-  echo "sudo ts-up up --authkey YOUR_AUTHKEY --ssh"
-  echo
-  echo "Then check:"
-  echo
-  echo "ts-up status"
-  echo "ts-up ip -4"
-  echo
-else
+if ! pgrep -x tailscaled >/dev/null; then
   echo
   echo "[!] tailscaled failed to start."
-  echo "Run this to see the error:"
-  echo
-  echo "cat /var/log/tailscaled.log"
-  echo
+  echo "Log:"
+  cat /var/log/tailscaled.log || true
   exit 1
 fi
+
+DAEMON_VERSION="$(/usr/local/bin/tailscale --socket=/var/run/tailscale/tailscaled.sock version 2>/dev/null | head -n 1 || true)"
+
+echo
+echo "[✓] Tailscale installed and daemon is running."
+echo "[i] Version: $DAEMON_VERSION"
+echo
+echo "Now run:"
+echo
+echo "sudo ts-up up --authkey YOUR_AUTHKEY --ssh"
+echo
+echo "Then check:"
+echo
+echo "ts-up status"
+echo "ts-up ip -4"
+echo

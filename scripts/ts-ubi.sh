@@ -51,9 +51,21 @@ chmod +x /usr/local/bin/tailscale /usr/local/bin/tailscaled
 echo "[+] Creating simple ts-up wrapper..."
 cat >/usr/local/bin/ts-up <<'EOF'
 #!/usr/bin/env bash
-/usr/local/bin/tailscale \
-  --socket=/var/run/tailscale/tailscaled.sock \
-  "$@"
+
+SOCKET="/var/run/tailscale/tailscaled.sock"
+
+/usr/local/bin/tailscale --socket="$SOCKET" "$@"
+RET=$?
+
+echo
+echo "[i] Current Tailscale status:"
+/usr/local/bin/tailscale --socket="$SOCKET" status 2>/dev/null || true
+
+echo
+echo "[i] Current Tailscale IP:"
+/usr/local/bin/tailscale --socket="$SOCKET" ip -4 2>/dev/null || true
+
+exit "$RET"
 EOF
 chmod +x /usr/local/bin/ts-up
 
@@ -73,11 +85,11 @@ if ! pgrep -x tailscaled >/dev/null; then
   exit 1
 fi
 
-DAEMON_VERSION="$(/usr/local/bin/tailscale --socket=/var/run/tailscale/tailscaled.sock version 2>/dev/null | head -n 1 || true)"
-
 echo
 echo "[✓] Tailscale installed and daemon is running."
-echo "[i] Version: $DAEMON_VERSION"
+echo "[i] Version:"
+/usr/local/bin/tailscale --socket=/var/run/tailscale/tailscaled.sock version || true
+
 echo
 echo "Now run:"
 echo

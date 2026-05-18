@@ -7,12 +7,12 @@ TS_DIR="tailscale_${TS_VERSION}_${TS_ARCH}"
 TS_TGZ="${TS_DIR}.tgz"
 TS_URL="https://pkgs.tailscale.com/stable/${TS_TGZ}"
 
-echo "[+] Installing Tailscale for old Ubilinux/Debian..."
+echo "[+] Installing Tailscale ${TS_VERSION} for old Ubilinux/Debian..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "[!] Please run with sudo:"
-    echo "curl -fsSL YOUR_URL | sudo bash"
-    exit 1
+  echo "[!] Please run with sudo:"
+  echo "curl -fsSL YOUR_URL | sudo bash"
+  exit 1
 fi
 
 mkdir -p /var/lib/tailscale
@@ -23,7 +23,7 @@ echo "[+] Cleaning old Tailscale processes..."
 pkill -9 tailscaled 2>/dev/null || true
 pkill -9 tailscale 2>/dev/null || true
 
-echo "[+] Removing stale interface..."
+echo "[+] Removing stale tailscale0 interface..."
 ip link delete tailscale0 2>/dev/null || true
 
 cd /tmp
@@ -36,13 +36,20 @@ echo "[+] Extracting..."
 tar xzf "$TS_TGZ"
 
 echo "[+] Installing binaries..."
-cp "$TS_DIR/tailscale" /usr/local/bin/
-cp "$TS_DIR/tailscaled" /usr/local/bin/
-chmod +x /usr/local/bin/tailscale
-chmod +x /usr/local/bin/tailscaled
+cp "$TS_DIR/tailscale" /usr/local/bin/tailscale
+cp "$TS_DIR/tailscaled" /usr/local/bin/tailscaled
+chmod +x /usr/local/bin/tailscale /usr/local/bin/tailscaled
 
-echo "[+] Starting daemon..."
+echo "[+] Creating simple ts-up wrapper..."
+cat >/usr/local/bin/ts-up <<'EOF'
+#!/usr/bin/env bash
+/usr/local/bin/tailscale \
+  --socket=/var/run/tailscale/tailscaled.sock \
+  "$@"
+EOF
+chmod +x /usr/local/bin/ts-up
 
+echo "[+] Starting tailscaled..."
 nohup /usr/local/bin/tailscaled \
   --state=/var/lib/tailscale/tailscaled.state \
   --socket=/var/run/tailscale/tailscaled.sock \
@@ -51,19 +58,24 @@ nohup /usr/local/bin/tailscaled \
 sleep 5
 
 if pgrep tailscaled >/dev/null; then
-    echo
-    echo "[✓] Tailscaled is running"
-    echo
-    echo "Run this now:"
-    echo
-    echo "sudo /usr/local/bin/tailscale \\"
-    echo "--socket=/var/run/tailscale/tailscaled.sock \\"
-    echo "up --authkey YOUR_AUTHKEY --ssh"
-    echo
+  echo
+  echo "[✓] Tailscale installed and daemon is running."
+  echo
+  echo "Now run:"
+  echo
+  echo "sudo ts-up up --authkey YOUR_AUTHKEY --ssh"
+  echo
+  echo "Then check:"
+  echo
+  echo "ts-up status"
+  echo "ts-up ip -4"
+  echo
 else
-    echo "[!] tailscaled failed"
-    echo
-    echo "Check:"
-    echo "cat /var/log/tailscaled.log"
-    exit 1
+  echo
+  echo "[!] tailscaled failed to start."
+  echo "Run this to see the error:"
+  echo
+  echo "cat /var/log/tailscaled.log"
+  echo
+  exit 1
 fi

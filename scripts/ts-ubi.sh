@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TS_VERSION="1.98.2"
-TS_ARCH="amd64"
+TS_VERSION="${TS_VERSION:-1.98.2}"
+TS_ARCH="${TS_ARCH:-amd64}"
 TS_DIR="tailscale_${TS_VERSION}_${TS_ARCH}"
 TS_TGZ="${TS_DIR}.tgz"
 TS_URL="https://pkgs.tailscale.com/stable/${TS_TGZ}"
+TS_STATE_DIR="/var/lib/tailscale"
+TS_RUN_DIR="/var/run/tailscale"
+TS_SOCKET="${TS_RUN_DIR}/tailscaled.sock"
+TS_STATE="${TS_STATE_DIR}/tailscaled.state"
+TS_SERVICE="/etc/systemd/system/tailscaled.service"
 
 echo "[+] Installing Tailscale ${TS_VERSION} for old Ubilinux/Debian..."
 
@@ -14,36 +19,151 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-echo "[+] Stopping any existing Tailscale..."
-systemctl stop tailscaled 2>/dev/null || true
-service tailscaled stop 2>/dev/null || true
+if ! command -v systemctl >/dev/null 2>&1; then
+  echo "[!] systemctl is required on this board"
+  exit 1
+fi
 
-pkill -9 tailscaled 2>/dev/null || true
-pkill -9 tailscale 2>/dev/null || true
-sleep 2
+download_file() {
+  local url="$1"
+  local out="$2"
 
-echo "[+] Cleaning old sockets/interfaces..."
-ip link delete tailscale0 2>/dev/null || true
-rm -f /var/run/tailscale/tailscaled.sock
-rm -f /run/tailscale/tailscaled.sock
+  if command -v wget >/dev/null 2>&1; then
+    wget -q --show-progress -O "$out" "$url"
+    return
+  fi
 
-mkdir -p /var/lib/tailscale
-mkdir -p /var/run/tailscale
-mkdir -p /usr/local/bin
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL "$url" -o "$out"
+    return
+  fi
+
+  echo "[!] Need wget or curl to download Tailscale"
+  exit 1
+}
+
+is_tailscale_ssh() {
+  local conn="${SSH_CONNECTION:-}"
+  local peer="${conn%% *}"
+
+  case "$peer" in
+    100.*|fd7a:*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+backup_state() {
+  if [ ! -s "$TS_STATE" ]; then
+    return
+  fi
+
+  local backup_dir="/root/tailscale-backups"
+  local stamp
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$backup_dir"
+  cp -a "$TS_STATE" "${backup_dir}/tailscaled.state.${stamp}"
+  echo "[+] Backed up existing Tailscale state to ${backup_dir}/tailscaled.state.${stamp}"
+}
+
+write_service() {
+  echo "[+] Installing persistent systemd service..."
+  cat >"$TS_SERVICE" <<EOF
+[Unit]
+Description=Tailscale node agent
+Documentation=https://tailscale.com/kb/
+Wants=network-online.target
+After=network-pre.target network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/mkdir -p ${TS_RUN_DIR}
+ExecStart=/usr/local/bin/tailscaled --state=${TS_STATE} --socket=${TS_SOCKET}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable tailscaled.service >/dev/null
+}
+
+cleanup_dead_runtime() {
+  ip link delete tailscale0 2>/dev/null || true
+  rm -f "$TS_SOCKET" /run/tailscale/tailscaled.sock
+}
+
+start_or_handoff() {
+  local current_pids
+  current_pids="$(pgrep -x tailscaled 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+
+  if [ -n "$current_pids" ]; then
+    echo "[+] Existing tailscaled process found: ${current_pids}"
+
+    if is_tailscale_ssh; then
+      local unit_name="tailscale-handoff-$(date +%s)"
+      local handoff_cmd="kill ${current_pids} 2>/dev/null || true; sleep 1; rm -f '${TS_SOCKET}' /run/tailscale/tailscaled.sock; ip link delete tailscale0 2>/dev/null || true; systemctl start tailscaled.service"
+
+      echo "[+] Running over Tailscale SSH; scheduling safe handoff through systemd..."
+      if command -v systemd-run >/dev/null 2>&1; then
+        systemd-run \
+          --unit="$unit_name" \
+          --on-active=2s \
+          /bin/bash -lc "$handoff_cmd"
+      else
+        nohup /bin/bash -lc "sleep 2; ${handoff_cmd}" >/tmp/tailscale-handoff.log 2>&1 &
+      fi
+      echo "[+] Handoff scheduled. This SSH session may reconnect briefly."
+      return
+    fi
+
+    echo "[+] Restarting tailscaled under systemd..."
+    kill $current_pids 2>/dev/null || true
+    sleep 1
+    cleanup_dead_runtime
+  else
+    cleanup_dead_runtime
+  fi
+
+  systemctl restart tailscaled.service
+  sleep 3
+
+  if ! systemctl is-active --quiet tailscaled.service; then
+    echo "[!] tailscaled.service did not start"
+    systemctl status tailscaled.service --no-pager -l || true
+    exit 1
+  fi
+
+  if /usr/local/bin/tailscale --socket="$TS_SOCKET" status --self >/dev/null 2>&1; then
+    echo "[+] Tailscale is running and authenticated."
+  else
+    echo "[+] Tailscale daemon is running. If this is a fresh install, run:"
+    echo "    ts-up up"
+  fi
+}
+
+mkdir -p "$TS_STATE_DIR" "$TS_RUN_DIR" /usr/local/bin
+backup_state
 
 cd /tmp
 rm -rf "$TS_DIR" "$TS_TGZ"
 
 echo "[+] Downloading Tailscale ${TS_VERSION}..."
-wget -q --show-progress "$TS_URL"
+download_file "$TS_URL" "$TS_TGZ"
 
 echo "[+] Extracting..."
 tar xzf "$TS_TGZ"
 
-echo "[+] Installing binaries..."
-cp "$TS_DIR/tailscale" /usr/local/bin/tailscale
-cp "$TS_DIR/tailscaled" /usr/local/bin/tailscaled
-chmod +x /usr/local/bin/tailscale /usr/local/bin/tailscaled
+echo "[+] Installing static binaries..."
+install -m 0755 "$TS_DIR/tailscale" /usr/local/bin/tailscale.new
+install -m 0755 "$TS_DIR/tailscaled" /usr/local/bin/tailscaled.new
+mv -f /usr/local/bin/tailscale.new /usr/local/bin/tailscale
+mv -f /usr/local/bin/tailscaled.new /usr/local/bin/tailscaled
 
 echo "[+] Creating ts-up wrapper..."
 cat >/usr/local/bin/ts-up <<'EOF'
@@ -52,17 +172,18 @@ cat >/usr/local/bin/ts-up <<'EOF'
   --socket=/var/run/tailscale/tailscaled.sock \
   "$@"
 EOF
-
 chmod +x /usr/local/bin/ts-up
 
-echo "[+] Starting tailscaled..."
-nohup /usr/local/bin/tailscaled \
-  --state=/var/lib/tailscale/tailscaled.state \
-  --socket=/var/run/tailscale/tailscaled.sock \
-  >/var/log/tailscaled.log 2>&1 &
+write_service
 
-sleep 5
+if command -v systemd-analyze >/dev/null 2>&1; then
+  systemd-analyze verify "$TS_SERVICE" >/dev/null 2>&1 || true
+fi
+
+start_or_handoff
 
 echo
-echo "[✓] Tailscale installed successfully."
+echo "[OK] Tailscale installed with persistent boot service."
+echo "[OK] Service: tailscaled.service"
+echo "[OK] CLI: ts-up status"
 echo

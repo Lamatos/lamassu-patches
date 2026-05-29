@@ -11,6 +11,8 @@ TS_RUN_DIR="/var/run/tailscale"
 TS_SOCKET="${TS_RUN_DIR}/tailscaled.sock"
 TS_STATE="${TS_STATE_DIR}/tailscaled.state"
 TS_SERVICE="/etc/systemd/system/tailscaled.service"
+NET_GUARD="/usr/local/sbin/upboard-network-guard"
+NET_GUARD_SERVICE="/etc/systemd/system/upboard-network-guard.service"
 
 echo "[+] Installing Tailscale ${TS_VERSION} for old Ubilinux/Debian..."
 
@@ -69,14 +71,118 @@ backup_state() {
   echo "[+] Backed up existing Tailscale state to ${backup_dir}/tailscaled.state.${stamp}"
 }
 
+detect_wired_iface() {
+  ip -o link show | awk -F': ' '$2 != "lo" && $2 !~ /^tailscale/ && $2 !~ /^docker/ && $2 !~ /^br-/ && $2 !~ /^veth/ && $2 ~ /^(en|eth)/ {print $2; exit}'
+}
+
+install_network_guard() {
+  local iface="${UPBOARD_NET_IFACE:-}"
+
+  if [[ -z "$iface" ]]; then
+    iface="$(detect_wired_iface || true)"
+  fi
+
+  if [[ -z "$iface" ]]; then
+    echo "[!] No wired Ethernet interface found; skipping network guard"
+    return
+  fi
+
+  echo "[+] Installing UP-board Ethernet DHCP guard for ${iface}..."
+
+  if [[ -f /etc/network/interfaces ]]; then
+    local stamp
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    cp -a /etc/network/interfaces "/root/interfaces.backup.${stamp}"
+    cat >/etc/network/interfaces <<EOF
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+source /etc/network/interfaces.d/*
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The UP Board wired Ethernet interface
+auto ${iface}
+allow-hotplug ${iface}
+iface ${iface} inet dhcp
+EOF
+    echo "[+] Updated /etc/network/interfaces for ${iface} (backup: /root/interfaces.backup.${stamp})"
+  fi
+
+  cat >"$NET_GUARD" <<'EOF'
+#!/bin/sh
+set -eu
+
+IFACE="${UPBOARD_NET_IFACE:-}"
+
+if [ -z "$IFACE" ]; then
+  IFACE="$(ip -o link show | awk -F': ' '$2 != "lo" && $2 !~ /^tailscale/ && $2 !~ /^docker/ && $2 !~ /^br-/ && $2 !~ /^veth/ && $2 ~ /^(en|eth)/ {print $2; exit}')"
+fi
+
+if [ -z "$IFACE" ]; then
+  echo "No wired Ethernet interface found" >&2
+  exit 0
+fi
+
+ip link set "$IFACE" up 2>/dev/null || true
+
+n=0
+while [ "$n" -lt 20 ]; do
+  if ip link show "$IFACE" | grep -q "LOWER_UP"; then
+    break
+  fi
+  n=$((n + 1))
+  sleep 1
+done
+
+if ip -4 addr show dev "$IFACE" | grep -q "inet " && ip route show default 0.0.0.0/0 | grep -q "dev $IFACE"; then
+  echo "$IFACE already has IPv4 and default route"
+  exit 0
+fi
+
+if pgrep -f "dhclient .*${IFACE}" >/dev/null 2>&1; then
+  echo "dhclient already running for $IFACE"
+else
+  dhclient -4 -v "$IFACE" || dhclient "$IFACE" || true
+fi
+
+if ! ip route show default 0.0.0.0/0 | grep -q "dev $IFACE"; then
+  echo "No default route after DHCP on $IFACE" >&2
+  exit 1
+fi
+EOF
+  chmod 0755 "$NET_GUARD"
+
+  cat >"$NET_GUARD_SERVICE" <<EOF
+[Unit]
+Description=Ensure UP Board wired Ethernet has DHCP before dependent services
+After=networking.service
+Before=tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=${NET_GUARD}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable upboard-network-guard.service >/dev/null
+  "$NET_GUARD" || true
+}
+
 write_service() {
   echo "[+] Installing persistent systemd service..."
   cat >"$TS_SERVICE" <<EOF
 [Unit]
 Description=Tailscale node agent
 Documentation=https://tailscale.com/kb/
-Wants=network-online.target
-After=network-pre.target network-online.target
+Wants=network-online.target upboard-network-guard.service
+After=network-pre.target network-online.target upboard-network-guard.service
 
 [Service]
 Type=simple
@@ -149,6 +255,7 @@ start_or_handoff() {
 
 mkdir -p "$TS_STATE_DIR" "$TS_RUN_DIR" /usr/local/bin
 backup_state
+install_network_guard
 
 cd /tmp
 rm -rf "$TS_DIR" "$TS_TGZ"

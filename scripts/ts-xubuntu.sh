@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-KEY=""
+KEY="tskey-REMOVED"
 k=${KEY:-${TS_AUTHKEY:-${1:?authkey}}}
 apt-get update
 apt-get install -y curl openssh-server

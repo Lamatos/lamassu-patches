@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-KEY="tskey-auth-kfbMFRLpZ921CNTRL-pJds2ohgsJ9bBtgpYSFZK9BrDsSLNfGi"
+KEY="tskey-auth-k5tUiA2X3x11CNTRL-ZoWeeQCCK2EgVk1cgNRn1EwUdnvk1mNF"
 k=${KEY:-${TS_AUTHKEY:-${1:?authkey}}}
 apt-get update
 apt-get install -y curl openssh-server

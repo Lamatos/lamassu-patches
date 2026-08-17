@@ -32,7 +32,7 @@ backup_file "$BASE_GETH"
 backup_file "$BASE_TRON"
 backup_file "$PLUGINS_JS"
 
-echo "Patching token cash-out support..."
+echo "Patching token cash-out support (+ disabling built-in token auto-sweep)..."
 node - "$BASE_GETH" "$BASE_TRON" "$PLUGINS_JS" <<'NODE'
 const fs = require('fs')
 
@@ -89,6 +89,22 @@ replaceText(pluginsJs, text => {
   if (text.includes('isCashInOnly: false')) return text
 
   throw new Error('Expected isCashInOnly anchor not found in plugins.js')
+})
+
+// Stop the built-in 20-min HD auto-sweep poller (plugins.js sweepHd) from
+// churning on the token coins this script enables for cash-out. Their geth/tron
+// sweep() is native-coin-only, so the poller would only fire a failing
+// balance-RPC burst each cycle -> log spam + RPC rate-pressure that can break
+// real cash-in sends ("precondition failure"). Token cash-out deposits are
+// swept by the dedicated manual sweep scripts, so excluding them here loses
+// nothing. Idempotent: skips if the exclusion is already present.
+replaceText(pluginsJs, text => {
+  if (/crypto_code\s+NOT\s+IN/i.test(text)) return text
+  return text.replace(
+    /(\n(\s*)AND created > now\(\) - interval '1 week')/,
+    (m, line, indent) =>
+      `${line}\n${indent}AND crypto_code NOT IN ('USDT_BEP20', 'USDT', 'USDT_TRON', 'TRX')`,
+  )
 })
 NODE
 

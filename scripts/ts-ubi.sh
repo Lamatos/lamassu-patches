@@ -14,6 +14,16 @@ TS_SERVICE="/etc/systemd/system/tailscaled.service"
 NET_GUARD="/usr/local/sbin/upboard-network-guard"
 NET_GUARD_SERVICE="/etc/systemd/system/upboard-network-guard.service"
 
+# --- Zero-touch join --------------------------------------------------------
+# Paste a SINGLE-USE (auto-revoking) Tailscale auth key between the quotes below.
+# Leave it empty to fall back to a TS_AUTHKEY env var, or to a manual `ts-up up`.
+# Recommended key settings in the Tailscale admin console:
+#   Reusable   : OFF  (one-shot, so the key revokes itself after this box joins)
+#   Ephemeral  : OFF  (a BTM must survive reboots -- do NOT tick this)
+#   Pre-approved + Tagged (e.g. tag:Prod) so the node lands tagged, not user-owned
+TS_BAKED_AUTHKEY=""
+TS_JOIN_KEY="${TS_BAKED_AUTHKEY:-${TS_AUTHKEY:-}}"
+
 echo "[+] Installing Tailscale ${TS_VERSION} for old Ubilinux/Debian..."
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -248,8 +258,14 @@ start_or_handoff() {
   if /usr/local/bin/tailscale --socket="$TS_SOCKET" status --self >/dev/null 2>&1; then
     echo "[+] Tailscale is running and authenticated."
   else
-    echo "[+] Tailscale daemon is running. If this is a fresh install, run:"
-    echo "    ts-up up"
+    if [ -n "${TS_JOIN_KEY:-}" ]; then
+      echo "[+] Fresh install: joining the tailnet with the baked auth key..."
+      /usr/local/bin/tailscale --socket="$TS_SOCKET" up --auth-key="$TS_JOIN_KEY" --ssh
+      echo "[+] Joined. The single-use key is now spent (auto-revoked)."
+    else
+      echo "[+] Tailscale daemon is running. If this is a fresh install, run:"
+      echo "        ts-up up"
+    fi
   fi
 }
 

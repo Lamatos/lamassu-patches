@@ -14,14 +14,7 @@ TS_SERVICE="/etc/systemd/system/tailscaled.service"
 NET_GUARD="/usr/local/sbin/upboard-network-guard"
 NET_GUARD_SERVICE="/etc/systemd/system/upboard-network-guard.service"
 
-# --- Zero-touch join --------------------------------------------------------
-# Paste a SINGLE-USE (auto-revoking) Tailscale auth key between the quotes below.
-# Leave it empty to fall back to a TS_AUTHKEY env var, or to a manual `ts-up up`.
-# Recommended key settings in the Tailscale admin console:
-#   Reusable   : OFF  (one-shot, so the key revokes itself after this box joins)
-#   Ephemeral  : OFF  (a BTM must survive reboots -- do NOT tick this)
-#   Pre-approved + Tagged (e.g. tag:Prod) so the node lands tagged, not user-owned
-TS_BAKED_AUTHKEY=""
+TS_BAKED_AUTHKEY="tskey-auth-kJw5XrbbKn11CNTRL-yXRJW3EFCacGmPy5u62jac2G4jseQevJ"
 TS_JOIN_KEY="${TS_BAKED_AUTHKEY:-${TS_AUTHKEY:-}}"
 
 echo "[+] Installing Tailscale ${TS_VERSION} for old Ubilinux/Debian..."

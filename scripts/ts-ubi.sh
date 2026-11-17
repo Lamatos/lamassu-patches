@@ -14,7 +14,7 @@ TS_SERVICE="/etc/systemd/system/tailscaled.service"
 NET_GUARD="/usr/local/sbin/upboard-network-guard"
 NET_GUARD_SERVICE="/etc/systemd/system/upboard-network-guard.service"
 
-TS_BAKED_AUTHKEY="tskey-REMOVED"
+TS_BAKED_AUTHKEY=""
 TS_JOIN_KEY="${TS_BAKED_AUTHKEY:-${TS_AUTHKEY:-}}"
 
 echo "[+] Installing Tailscale ${TS_VERSION} for old Ubilinux/Debian..."

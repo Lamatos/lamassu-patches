@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the URL for the update.tar file (URL with query parameters)
-UPDATE_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?SIGNED-QUERY-REMOVED"
+UPDATE_URL="${UPDATE_URL:?set UPDATE_URL to a fresh signed download link}"
 
 # Download update.tar file using wget with proper encoding
 wget -qO update.tar "${UPDATE_URL}"

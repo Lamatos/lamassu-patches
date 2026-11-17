@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Define the URLs for the files
-UPDATE_TAR_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/update.tar?SIGNED-QUERY-REMOVED"
-MANUAL_UPDATE_JS_URL="https://fra1.digitaloceanspaces.com/lama-images/aaeon-upboard/Packages/manual_update.js?SIGNED-QUERY-REMOVED"
+UPDATE_TAR_URL="${UPDATE_TAR_URL:?set UPDATE_TAR_URL to a fresh signed download link}"
+MANUAL_UPDATE_JS_URL="${MANUAL_UPDATE_JS_URL:?set MANUAL_UPDATE_JS_URL to a fresh signed download link}"
 
 # Target directories
 UPDATE_DIR="/opt/lamassu-updates/download"
